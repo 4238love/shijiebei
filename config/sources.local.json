@@ -4,7 +4,7 @@
       "name": "espn-world-cup-scoreboard",
       "url": "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard",
       "priority": 1,
-      "adapter": "json",
+      "adapter": "espn_scoreboard",
       "notes": "JSON scoreboard endpoint for fixtures and results."
     },
     {
@@ -20,7 +20,7 @@
       "name": "espn-world-cup-scoreboard-form",
       "url": "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard",
       "priority": 1,
-      "adapter": "json",
+      "adapter": "espn_scoreboard",
       "notes": "Recent event and result material for form extraction."
     },
     {

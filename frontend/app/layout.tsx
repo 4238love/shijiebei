@@ -13,7 +13,14 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <nav className="top-nav" aria-label="Primary navigation">
+          <a href="/">Prediction</a>
+          <a href="/sources">Sources</a>
+          <a href="/methodology">Methodology</a>
+        </nav>
+        {children}
+      </body>
     </html>
   );
 }
