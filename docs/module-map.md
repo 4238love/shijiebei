@@ -20,7 +20,7 @@ This map summarizes the current implementation using the project glossary.
 
 - `backend/app/prediction_repository.py`
   - Owns the Prediction Repository seam used by `prediction_api.py`.
-  - Current adapter is `InMemoryPredictionRepository`; the next adapter should be PostgreSQL-backed.
+  - Provides `InMemoryPredictionRepository` for tests/local seams and `PostgresPredictionRepository` for Docker deployment.
 
 ## Data source path
 
@@ -61,4 +61,4 @@ This map summarizes the current implementation using the project glossary.
 
 ## Known next deepening opportunity
 
-`InMemoryPredictionRepository` proves the seam but does not preserve durable behavior. Future Backtest Runs need saved Prediction Dataset and Weight Version references. The next architecture deepening should add a PostgreSQL adapter for the Prediction Repository.
+`PostgresPredictionRepository` persists the serialized Match Prediction payload. Future Backtest Runs need richer query seams for Prediction Dataset references, Weight Version references, and actual results instead of treating the payload as an opaque document.
