@@ -56,6 +56,14 @@ _Avoid_: Blind merge, source voting
 A data-type-specific ordering that decides which data source is more trusted when multiple sources disagree.
 _Avoid_: Global source ranking
 
+**Source Catalog**:
+A configured list of data sources grouped by category for the first-wave crawl, including schedule, team form, ranking, injury, odds, news sentiment, and player data.
+_Avoid_: URL list
+
+**Validated Fact**:
+A normalized fact after cross-source validation has assigned a conflict status, selected value, and source evidence.
+_Avoid_: Final truth
+
 **Conflict Status**:
 The resolved state of a normalized fact after cross-source validation, such as confirmed, conflicting, missing, or stale.
 _Avoid_: Parse status

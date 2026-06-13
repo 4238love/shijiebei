@@ -4,10 +4,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.health import router as health_router
 from app.methodology_api import router as methodology_router
 from app.prediction_api import router as prediction_router
+from app.prediction_repository import InMemoryPredictionRepository, PredictionRepository
 
 
-def create_app() -> FastAPI:
+def create_app(prediction_repository: PredictionRepository | None = None) -> FastAPI:
     app = FastAPI(title="World Cup Prediction Tool API")
+    app.state.prediction_repository = prediction_repository or InMemoryPredictionRepository()
 
     app.add_middleware(
         CORSMiddleware,

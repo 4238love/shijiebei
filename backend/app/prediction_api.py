@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from typing import Any
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Request, status
@@ -12,6 +11,7 @@ from app.prediction_engine import (
     WeightVersion,
     run_match_prediction,
 )
+from app.prediction_repository import PredictionRepository
 
 router = APIRouter(prefix="/predictions", tags=["predictions"])
 
@@ -107,13 +107,13 @@ async def create_prediction(payload: CreatePredictionRequest, request: Request):
         confidence_level=prediction.confidence_level,
     )
 
-    _prediction_store(request)[prediction_id] = response.model_dump()
+    _prediction_repository(request).save(response.model_dump())
     return response
 
 
 @router.get("/{prediction_id}", response_model=PredictionResponse)
 async def get_prediction(prediction_id: str, request: Request):
-    prediction = _prediction_store(request).get(prediction_id)
+    prediction = _prediction_repository(request).get(prediction_id)
     if prediction is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -123,8 +123,5 @@ async def get_prediction(prediction_id: str, request: Request):
     return prediction
 
 
-def _prediction_store(request: Request) -> dict[str, dict[str, Any]]:
-    if not hasattr(request.app.state, "predictions"):
-        request.app.state.predictions = {}
-
-    return request.app.state.predictions
+def _prediction_repository(request: Request) -> PredictionRepository:
+    return request.app.state.prediction_repository
