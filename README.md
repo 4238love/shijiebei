@@ -10,9 +10,9 @@ docker compose up -d --build
 
 Services:
 
-- Frontend: <http://localhost:3000>
+- Frontend: <http://localhost:13000>
 - Backend health: <http://localhost:8000/health>
-- PostgreSQL: `localhost:5432`
+- PostgreSQL: `localhost:15432`
 
 ## Development checks
 

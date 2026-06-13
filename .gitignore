@@ -1,6 +1,7 @@
 __pycache__/
 .pytest_cache/
 .pytest-tmp/
+.test-output/
 .scratch/
 .mypy_cache/
 .ruff_cache/

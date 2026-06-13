@@ -1,4 +1,6 @@
 import json
+from pathlib import Path
+from uuid import uuid4
 
 from app.data_sources import FixtureDataSourceAdapter
 from app.prediction_engine import WeightVersion, run_match_prediction
@@ -33,7 +35,14 @@ def write_fixture(path):
     )
 
 
-def test_adapter_saves_source_snapshot(tmp_path):
+def workspace_tmp() -> Path:
+    path = Path(".test-output") / uuid4().hex
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def test_adapter_saves_source_snapshot():
+    tmp_path = workspace_tmp()
     fixture_path = tmp_path / "match.json"
     snapshot_dir = tmp_path / "snapshots"
     write_fixture(fixture_path)
@@ -54,7 +63,8 @@ def test_adapter_saves_source_snapshot(tmp_path):
     )
 
 
-def test_adapter_normalizes_fixture_to_prediction_dataset(tmp_path):
+def test_adapter_normalizes_fixture_to_prediction_dataset():
+    tmp_path = workspace_tmp()
     fixture_path = tmp_path / "match.json"
     snapshot_dir = tmp_path / "snapshots"
     write_fixture(fixture_path)
@@ -73,7 +83,8 @@ def test_adapter_normalizes_fixture_to_prediction_dataset(tmp_path):
     assert dataset.away.defense_weakness > dataset.home.defense_weakness
 
 
-def test_adapter_dataset_can_feed_prediction_engine(tmp_path):
+def test_adapter_dataset_can_feed_prediction_engine():
+    tmp_path = workspace_tmp()
     fixture_path = tmp_path / "match.json"
     snapshot_dir = tmp_path / "snapshots"
     write_fixture(fixture_path)

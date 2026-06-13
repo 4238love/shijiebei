@@ -1,0 +1,114 @@
+{
+  "schedule": [
+    {
+      "name": "espn-world-cup-scoreboard",
+      "url": "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard",
+      "priority": 1,
+      "adapter": "json",
+      "notes": "JSON scoreboard endpoint for fixtures and results."
+    },
+    {
+      "name": "fifa-2026-fixtures",
+      "url": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026/scores-fixtures",
+      "priority": 2,
+      "adapter": "webpage",
+      "notes": "Official tournament fixtures page; use as authoritative schedule fallback."
+    }
+  ],
+  "team_form": [
+    {
+      "name": "espn-world-cup-scoreboard-form",
+      "url": "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard",
+      "priority": 1,
+      "adapter": "json",
+      "notes": "Recent event and result material for form extraction."
+    },
+    {
+      "name": "world-football-elo",
+      "url": "https://www.eloratings.net/",
+      "priority": 2,
+      "adapter": "webpage",
+      "notes": "National team Elo ratings and match history context."
+    }
+  ],
+  "ranking": [
+    {
+      "name": "fifa-men-ranking",
+      "url": "https://inside.fifa.com/fifa-world-ranking/men",
+      "priority": 1,
+      "adapter": "webpage",
+      "notes": "Official FIFA men's ranking page."
+    },
+    {
+      "name": "world-football-elo-ranking",
+      "url": "https://www.eloratings.net/",
+      "priority": 2,
+      "adapter": "webpage",
+      "notes": "Independent Elo-style strength rating."
+    }
+  ],
+  "injury": [
+    {
+      "name": "transfermarkt-world-cup-2026-injuries",
+      "url": "https://www.transfermarkt.com/world-cup-2026/verletztespieler/pokalwettbewerb/WM26",
+      "priority": 1,
+      "adapter": "webpage",
+      "notes": "Competition injury and absence material; page structure may require Playwright."
+    },
+    {
+      "name": "fifa-world-cup-news-injuries",
+      "url": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026/news",
+      "priority": 2,
+      "adapter": "webpage",
+      "notes": "Official news fallback for availability reports."
+    }
+  ],
+  "odds": [
+    {
+      "name": "oddsportal-world-cup",
+      "url": "https://www.oddsportal.com/football/world/world-cup/",
+      "priority": 1,
+      "adapter": "webpage",
+      "notes": "Market odds comparison source; dynamic rendering likely."
+    },
+    {
+      "name": "oddschecker-world-cup",
+      "url": "https://www.oddschecker.com/football/world-cup",
+      "priority": 2,
+      "adapter": "webpage",
+      "notes": "Secondary market comparison source."
+    }
+  ],
+  "news_sentiment": [
+    {
+      "name": "bbc-world-cup-football",
+      "url": "https://www.bbc.com/sport/football/world-cup",
+      "priority": 1,
+      "adapter": "webpage",
+      "notes": "News sentiment and tactical narrative source."
+    },
+    {
+      "name": "fifa-world-cup-news",
+      "url": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026/news",
+      "priority": 2,
+      "adapter": "webpage",
+      "notes": "Official news source."
+    }
+  ],
+  "player": [
+    {
+      "name": "transfermarkt-world-cup-2026-squads",
+      "url": "https://www.transfermarkt.com/world-cup-2026/teilnehmer/pokalwettbewerb/WM26",
+      "priority": 1,
+      "adapter": "webpage",
+      "notes": "Squad and player market/profile source; page structure may require Playwright."
+    },
+    {
+      "name": "fifa-world-cup-teams",
+      "url": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026/teams",
+      "priority": 2,
+      "adapter": "webpage",
+      "notes": "Official team list fallback."
+    }
+  ]
+}

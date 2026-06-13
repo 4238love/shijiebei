@@ -3,6 +3,8 @@ from app.data_sources import (
     SourceCatalog,
     SourceCategory,
 )
+from pathlib import Path
+from uuid import uuid4
 
 
 class FakeResponse:
@@ -23,7 +25,14 @@ class FakeHttpClient:
         return FakeResponse(self.content)
 
 
-def test_http_json_adapter_fetches_live_source_through_injected_client(tmp_path):
+def workspace_tmp() -> Path:
+    path = Path(".test-output") / uuid4().hex
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def test_http_json_adapter_fetches_live_source_through_injected_client():
+    tmp_path = workspace_tmp()
     content = b"""
     {
       "match": {"home_team": "Brazil", "away_team": "Croatia", "home_advantage": 1.08},

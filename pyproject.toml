@@ -1,4 +1,4 @@
 [tool.pytest.ini_options]
 pythonpath = ["backend"]
 testpaths = ["backend/tests"]
-addopts = "--basetemp=.pytest-tmp"
+addopts = "-p no:cacheprovider"
