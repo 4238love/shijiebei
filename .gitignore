@@ -1,0 +1,14 @@
+__pycache__/
+.pytest_cache/
+.pytest-tmp/
+.scratch/
+.mypy_cache/
+.ruff_cache/
+.venv/
+node_modules/
+.next/
+dist/
+build/
+*.pyc
+.env
+postgres-data/

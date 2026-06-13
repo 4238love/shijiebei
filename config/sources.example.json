@@ -1,0 +1,51 @@
+{
+  "schedule": [
+    {
+      "name": "schedule-primary",
+      "url": "https://data-source.example/schedule.json",
+      "priority": 1
+    }
+  ],
+  "team_form": [
+    {
+      "name": "form-primary",
+      "url": "https://data-source.example/team-form.json",
+      "priority": 1
+    }
+  ],
+  "ranking": [
+    {
+      "name": "ranking-primary",
+      "url": "https://data-source.example/rankings.json",
+      "priority": 1
+    }
+  ],
+  "injury": [
+    {
+      "name": "injury-primary",
+      "url": "https://data-source.example/injuries.json",
+      "priority": 1
+    }
+  ],
+  "odds": [
+    {
+      "name": "odds-primary",
+      "url": "https://data-source.example/odds.json",
+      "priority": 1
+    }
+  ],
+  "news_sentiment": [
+    {
+      "name": "news-primary",
+      "url": "https://data-source.example/news-sentiment.json",
+      "priority": 1
+    }
+  ],
+  "player": [
+    {
+      "name": "player-primary",
+      "url": "https://data-source.example/players.json",
+      "priority": 1
+    }
+  ]
+}

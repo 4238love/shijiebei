@@ -1,0 +1,221 @@
+:root {
+  color-scheme: dark;
+  --background: #060711;
+  --panel: rgba(18, 21, 42, 0.82);
+  --panel-border: rgba(154, 165, 255, 0.22);
+  --text: #f5f7ff;
+  --muted: #9ca5c7;
+  --accent: #e7d96f;
+  --ok: #75f0b2;
+  --warn: #f08a75;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--text);
+  background:
+    radial-gradient(circle at 20% 20%, rgba(64, 91, 255, 0.24), transparent 32rem),
+    radial-gradient(circle at 80% 0%, rgba(231, 217, 111, 0.12), transparent 28rem),
+    linear-gradient(145deg, #03040a, var(--background));
+  font-family: "Bahnschrift", "Aptos", "Segoe UI", sans-serif;
+}
+
+.shell {
+  width: min(1080px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 80px 0;
+}
+
+.hero {
+  padding: 48px;
+  border: 1px solid var(--panel-border);
+  border-radius: 32px;
+  background: linear-gradient(135deg, rgba(18, 21, 42, 0.92), rgba(7, 9, 22, 0.78));
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.45);
+}
+
+.eyebrow {
+  margin: 0 0 18px;
+  color: var(--accent);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+}
+
+h1 {
+  max-width: 760px;
+  margin: 0;
+  font-size: clamp(3.2rem, 8vw, 7.5rem);
+  line-height: 0.86;
+  letter-spacing: -0.08em;
+}
+
+.summary {
+  max-width: 720px;
+  margin: 32px 0 0;
+  color: var(--muted);
+  font-size: 1.18rem;
+  line-height: 1.7;
+}
+
+.compact {
+  margin-top: 16px;
+  font-size: 1rem;
+}
+
+.status-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.status-card {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  padding: 26px;
+  border: 1px solid var(--panel-border);
+  border-radius: 24px;
+  background: var(--panel);
+}
+
+.signal {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--warn);
+  box-shadow: 0 0 28px var(--warn);
+}
+
+.signal-ok {
+  background: var(--ok);
+  box-shadow: 0 0 28px var(--ok);
+}
+
+.label {
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+h2 {
+  margin: 0;
+  font-size: 1.8rem;
+  text-transform: uppercase;
+}
+
+.prediction-panel {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 24px;
+  margin-top: 18px;
+  padding: 34px;
+  border: 1px solid rgba(231, 217, 111, 0.26);
+  border-radius: 28px;
+  background:
+    linear-gradient(135deg, rgba(231, 217, 111, 0.1), transparent 38%),
+    rgba(10, 13, 28, 0.86);
+}
+
+.probability-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.probability-grid div {
+  padding: 18px;
+  border: 1px solid var(--panel-border);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.probability-grid strong {
+  display: block;
+  font-size: 2rem;
+}
+
+.scorelines {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.scorelines li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  color: var(--accent);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.method-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.method-grid article {
+  min-height: 220px;
+  padding: 28px;
+  border: 1px solid var(--panel-border);
+  border-radius: 28px;
+  background: rgba(10, 13, 28, 0.86);
+}
+
+.method-grid p:not(.label) {
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.method-grid ul {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 0;
+  list-style: none;
+}
+
+.method-grid li {
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  color: var(--accent);
+}
+
+.wide {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 720px) {
+  .hero {
+    padding: 30px;
+  }
+
+  .status-grid,
+  .prediction-panel,
+  .probability-grid,
+  .scorelines,
+  .method-grid,
+  .method-grid ul {
+    grid-template-columns: 1fr;
+  }
+}
