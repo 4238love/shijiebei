@@ -12,4 +12,7 @@ def test_methodology_endpoint_explains_real_prediction_boundaries():
     assert "Prediction Engine owns probabilities" in body["prediction_engine"]["principle"]
     assert body["ai_analysis"]["can_change_probabilities"] is False
     assert "cross_source_validation" in body
+    assert body["source_backed_prediction"]["endpoint"] == (
+        "POST /predictions/from-sources"
+    )
     assert "backtest_run" in body

@@ -30,6 +30,15 @@ async def methodology():
             "statuses": ["confirmed", "conflicting", "missing", "stale"],
             "principle": "Conflicts are shown and reduce Confidence Level instead of being silently merged.",
         },
+        "source_backed_prediction": {
+            "endpoint": "POST /predictions/from-sources",
+            "principle": "Validated Facts are transformed into a Prediction Dataset before the Prediction Engine runs.",
+            "outputs": [
+                "Match Prediction",
+                "Prediction Dataset",
+                "source summary",
+            ],
+        },
         "backtest_run": {
             "metrics": [
                 "outcome hit rate",

@@ -69,4 +69,16 @@ $body = @{ category = "injury" } | ConvertTo-Json
 Invoke-RestMethod -Method Post -Uri http://localhost:8000/sources/validate -ContentType "application/json" -Body $body
 ```
 
+Create a source-backed prediction by validating configured sources, constructing a Prediction Dataset, and then running the Prediction Engine:
+
+```powershell
+$body = @{
+  home_team = "Brazil"
+  away_team = "Croatia"
+  simulation_count = 10000
+  seed = 20260614
+} | ConvertTo-Json
+Invoke-RestMethod -Method Post -Uri http://localhost:8000/predictions/from-sources -ContentType "application/json" -Body $body
+```
+
 FIFA, Transfermarkt, OddsPortal, OddsChecker, BBC, and Elo pages are configured as crawl targets; their HTML/dynamic parsers should be added as separate adapters instead of being called directly from the prediction button.

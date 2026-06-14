@@ -15,8 +15,12 @@ This map summarizes the current implementation using the project glossary.
   - Owns `PredictionDataset`, `WeightVersion`, `MatchPrediction`, and Monte Carlo Simulation.
   - Produces win/draw/loss probabilities, top scorelines, expected goals, and Confidence Level.
 
+- `backend/app/prediction_dataset_builder.py`
+  - Builds a Prediction Dataset from Validated Facts emitted by source ingestion and cross-source validation.
+  - Turns non-confirmed facts into the Conflict Status penalty used by Confidence Level.
+
 - `backend/app/prediction_api.py`
-  - Exposes `POST /predictions` and `GET /predictions/{id}`.
+  - Exposes `POST /predictions`, `POST /predictions/from-sources`, and `GET /predictions/{id}`.
 
 - `backend/app/prediction_repository.py`
   - Owns the Prediction Repository seam used by `prediction_api.py`.
@@ -70,6 +74,7 @@ This map summarizes the current implementation using the project glossary.
 ## Current deepest seams
 
 - Prediction Engine seam: tested through `run_match_prediction`.
+- Source-backed Prediction Dataset seam: tested through `build_prediction_dataset_from_validated_facts`.
 - Data Source Adapter seam: tested through fixtures and injected HTTP clients.
 - Cross-Source Validation seam: tested with normalized facts and source priority.
 - AI Analysis Report seam: tested with fake providers.

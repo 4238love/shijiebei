@@ -18,6 +18,11 @@ type Methodology = {
     statuses: string[];
     principle: string;
   };
+  source_backed_prediction: {
+    endpoint: string;
+    principle: string;
+    outputs: string[];
+  };
   backtest_run: {
     metrics: string[];
   };
@@ -72,6 +77,11 @@ export default async function MethodologyPage() {
             <p className="label">Source conflicts</p>
             <h2>{methodology.cross_source_validation.statuses.join(" / ")}</h2>
             <p>{methodology.cross_source_validation.principle}</p>
+          </article>
+          <article>
+            <p className="label">Source-backed prediction</p>
+            <h2>{methodology.source_backed_prediction.endpoint}</h2>
+            <p>{methodology.source_backed_prediction.principle}</p>
           </article>
           <article className="wide">
             <p className="label">Backtest Run</p>
