@@ -1,10 +1,16 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel
 
+from app.cross_source_validation import (
+    CrossSourceValidator,
+    NormalizedFact,
+    ValidatedFact,
+)
 from app.data_sources import ScheduleMatch, SourceIngestionResult, SourceSnapshot
 from app.source_config import SourceDefinition, load_source_catalog_config
 from app.source_ingestion import ingest_source_safely
@@ -47,6 +53,14 @@ class ScheduleMatchResponse(BaseModel):
     away_score: int | None
 
 
+class NormalizedFactResponse(BaseModel):
+    fact_type: str
+    entity_key: str
+    value: Any
+    source_name: str
+    is_stale: bool
+
+
 class SourceIngestionResultResponse(BaseModel):
     source_name: str
     category: str | None
@@ -54,11 +68,26 @@ class SourceIngestionResultResponse(BaseModel):
     item_count: int
     snapshot: SourceSnapshotResponse | None
     matches: list[ScheduleMatchResponse]
+    facts: list[NormalizedFactResponse]
     message: str | None
 
 
 class SourceIngestResponse(BaseModel):
     results: list[SourceIngestionResultResponse]
+
+
+class ValidatedFactResponse(BaseModel):
+    fact_type: str
+    entity_key: str
+    status: str
+    value: Any | None
+    sources: list[str]
+    conflicting_values: dict[str, list[str]]
+
+
+class SourceValidateResponse(BaseModel):
+    results: list[SourceIngestionResultResponse]
+    validated_facts: list[ValidatedFactResponse]
 
 
 @router.get("", response_model=SourcesResponse)
@@ -97,6 +126,39 @@ async def ingest_sources(payload: SourceIngestRequest, request: Request):
     ]
     return SourceIngestResponse(
         results=[_ingestion_result_response(result) for result in results]
+    )
+
+
+@router.post("/validate", response_model=SourceValidateResponse)
+async def validate_sources(payload: SourceIngestRequest, request: Request):
+    config = load_source_catalog_config(_source_config_path(request))
+    definitions = _matching_sources(
+        config.sources,
+        category=payload.category,
+        source_name=payload.source_name,
+    )
+    if not definitions:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No matching data sources found",
+        )
+
+    results = [
+        ingest_source_safely(
+            definition,
+            snapshot_dir=_source_snapshot_dir(request),
+            http_client=getattr(request.app.state, "source_http_client", None),
+        )
+        for definition in definitions
+    ]
+    facts = [fact for result in results for fact in result.facts]
+
+    return SourceValidateResponse(
+        results=[_ingestion_result_response(result) for result in results],
+        validated_facts=[
+            _validated_fact_response(fact)
+            for fact in _validate_facts(definitions, facts)
+        ],
     )
 
 
@@ -143,6 +205,7 @@ def _ingestion_result_response(
         item_count=result.item_count,
         snapshot=_snapshot_response(result.snapshot) if result.snapshot else None,
         matches=[_match_response(match) for match in result.matches],
+        facts=[_fact_response(fact) for fact in result.facts],
         message=result.message,
     )
 
@@ -164,4 +227,62 @@ def _match_response(match: ScheduleMatch) -> ScheduleMatchResponse:
         status=match.status,
         home_score=match.home_score,
         away_score=match.away_score,
+    )
+
+
+def _fact_response(fact: NormalizedFact) -> NormalizedFactResponse:
+    return NormalizedFactResponse(
+        fact_type=fact.fact_type,
+        entity_key=fact.entity_key,
+        value=fact.value,
+        source_name=fact.source_name,
+        is_stale=fact.is_stale,
+    )
+
+
+def _validate_facts(
+    definitions: list[SourceDefinition],
+    facts: list[NormalizedFact],
+) -> list[ValidatedFact]:
+    if not facts:
+        return []
+
+    source_priority = {
+        fact_type: _source_names_by_priority(definitions)
+        for fact_type in {fact.fact_type for fact in facts}
+    }
+    validator = CrossSourceValidator(source_priority=source_priority)
+
+    validated: list[ValidatedFact] = []
+    for fact_type, entity_key in sorted(
+        {(fact.fact_type, fact.entity_key) for fact in facts}
+    ):
+        validated.append(
+            validator.validate(
+                fact_type=fact_type,
+                entity_key=entity_key,
+                facts=facts,
+            )
+        )
+
+    return validated
+
+
+def _source_names_by_priority(definitions: list[SourceDefinition]) -> list[str]:
+    return [
+        definition.name
+        for definition in sorted(definitions, key=lambda source: source.priority)
+    ]
+
+
+def _validated_fact_response(fact: ValidatedFact) -> ValidatedFactResponse:
+    return ValidatedFactResponse(
+        fact_type=fact.fact_type,
+        entity_key=fact.entity_key,
+        status=fact.status.value,
+        value=fact.value,
+        sources=fact.sources,
+        conflicting_values={
+            str(value): sources for value, sources in fact.conflicting_values.items()
+        },
     )

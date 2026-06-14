@@ -44,4 +44,18 @@ $body = @{ category = "schedule"; source_name = "espn-world-cup-scoreboard" } | 
 Invoke-RestMethod -Method Post -Uri http://localhost:8000/sources/ingest -ContentType "application/json" -Body $body
 ```
 
+Webpage sources now return category-aware normalized facts when the static HTML contains extractable signals:
+
+- `injury_availability`
+- `decimal_odds`
+- `news_sentiment`
+- `player_presence`
+
+Run a category validation pass to ingest all matching sources and cross-check facts by source priority:
+
+```powershell
+$body = @{ category = "injury" } | ConvertTo-Json
+Invoke-RestMethod -Method Post -Uri http://localhost:8000/sources/validate -ContentType "application/json" -Body $body
+```
+
 FIFA, Transfermarkt, OddsPortal, OddsChecker, BBC, and Elo pages are configured as crawl targets; their HTML/dynamic parsers should be added as separate adapters instead of being called directly from the prediction button.

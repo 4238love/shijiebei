@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from hashlib import sha256
+import html
 import json
 from enum import StrEnum
 from pathlib import Path
 import re
 
+from app.cross_source_validation import NormalizedFact
 from app.prediction_engine import PredictionDataset, TeamModel
 
 
@@ -64,6 +66,7 @@ class SourceIngestionResult:
     item_count: int
     snapshot: SourceSnapshot | None = None
     matches: tuple[ScheduleMatch, ...] = ()
+    facts: tuple[NormalizedFact, ...] = ()
     message: str | None = None
 
 
@@ -196,25 +199,36 @@ class HttpWebpageDataSourceAdapter:
         *,
         source_name: str,
         url: str,
+        category: SourceCategory | None = None,
         snapshot_dir: Path,
         http_client=None,
         timeout_seconds: int = 10,
     ):
         self.source_name = source_name
         self.url = url
+        self.category = category
         self.snapshot_dir = Path(snapshot_dir)
         self.http_client = http_client
         self.timeout_seconds = timeout_seconds
 
     def ingest_snapshot(self) -> SourceIngestionResult:
         snapshot = self.fetch_snapshot()
+        content = snapshot.path.read_text(encoding="utf-8", errors="ignore")
+        facts = tuple(
+            _facts_from_webpage(
+                content,
+                category=self.category,
+                source_name=self.source_name,
+            )
+        )
         return SourceIngestionResult(
             source_name=self.source_name,
-            category=None,
+            category=self.category,
             status=SourceIngestionStatus.INGESTED,
-            item_count=1,
+            item_count=max(1, len(facts)),
             snapshot=snapshot,
-            message="Snapshot captured; parser pending for this source.",
+            facts=facts,
+            message=_webpage_ingestion_message(facts),
         )
 
     def fetch_snapshot(self) -> SourceSnapshot:
@@ -370,3 +384,190 @@ def _http_get_webpage(http_client, url: str, *, timeout_seconds: int):
         return http_client.get(url, timeout=timeout_seconds, headers=headers)
     except TypeError:
         return http_client.get(url, timeout=timeout_seconds)
+
+
+def _facts_from_webpage(
+    content: str,
+    *,
+    category: SourceCategory | None,
+    source_name: str,
+) -> list[NormalizedFact]:
+    text = _html_to_text(content)
+    if category == SourceCategory.INJURY:
+        return _injury_facts(text, source_name=source_name)
+    if category == SourceCategory.ODDS:
+        return _odds_facts(text, source_name=source_name)
+    if category == SourceCategory.NEWS_SENTIMENT:
+        return _news_sentiment_facts(text, source_name=source_name)
+    if category == SourceCategory.PLAYER:
+        return _player_facts(text, source_name=source_name)
+
+    title = _html_title(content)
+    if title:
+        return [
+            NormalizedFact(
+                fact_type="webpage_title",
+                entity_key=source_name,
+                value=title,
+                source_name=source_name,
+            )
+        ]
+
+    return []
+
+
+def _html_to_text(content: str) -> str:
+    without_title = re.sub(
+        r"<title[^>]*>.*?</title>",
+        " ",
+        content,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    without_scripts = re.sub(
+        r"<(script|style)[^>]*>.*?</\1>",
+        " ",
+        without_title,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    text = re.sub(r"<[^>]+>", " ", without_scripts)
+    return re.sub(r"\s+", " ", html.unescape(text)).strip()
+
+
+def _html_title(content: str) -> str | None:
+    match = re.search(r"<title[^>]*>(.*?)</title>", content, re.IGNORECASE | re.DOTALL)
+    if not match:
+        return None
+
+    return re.sub(r"\s+", " ", html.unescape(match.group(1))).strip()
+
+
+def _injury_facts(text: str, *, source_name: str) -> list[NormalizedFact]:
+    statuses = (
+        "ruled out",
+        "doubtful",
+        "injured",
+        "suspended",
+        "unavailable",
+        "available",
+        "returning",
+        "returns",
+        "out",
+    )
+    pattern = re.compile(
+        rf"\b([A-Z][A-Za-z' -]{{1,48}}?)\s+(?:is\s+|was\s+)?({'|'.join(statuses)})\b",
+        re.IGNORECASE,
+    )
+    facts: list[NormalizedFact] = []
+    seen: set[tuple[str, str]] = set()
+    for match in pattern.finditer(text):
+        player_name = _clean_entity_name(match.group(1))
+        status = match.group(2).lower()
+        if status in {"returning", "returns"}:
+            status = "available"
+        key = (player_name, status)
+        if not player_name or key in seen:
+            continue
+        seen.add(key)
+        facts.append(
+            NormalizedFact(
+                fact_type="injury_availability",
+                entity_key=player_name,
+                value=status,
+                source_name=source_name,
+            )
+        )
+
+    return facts
+
+
+def _odds_facts(text: str, *, source_name: str) -> list[NormalizedFact]:
+    pattern = re.compile(r"\b([A-Z][A-Za-z' -]{1,32})\s+([1-9]\d?\.\d{2})\b")
+    facts: list[NormalizedFact] = []
+    seen: set[str] = set()
+    for match in pattern.finditer(text):
+        market = _clean_entity_name(match.group(1))
+        if market in seen:
+            continue
+        seen.add(market)
+        facts.append(
+            NormalizedFact(
+                fact_type="decimal_odds",
+                entity_key=market,
+                value=float(match.group(2)),
+                source_name=source_name,
+            )
+        )
+
+    return facts
+
+
+def _news_sentiment_facts(text: str, *, source_name: str) -> list[NormalizedFact]:
+    lower_text = text.lower()
+    negative_terms = (
+        "injury",
+        "injured",
+        "doubtful",
+        "crisis",
+        "concern",
+        "pressure",
+        "suspended",
+        "loss",
+    )
+    positive_terms = (
+        "boost",
+        "return",
+        "fit",
+        "confident",
+        "strong",
+        "available",
+        "win",
+    )
+    negative_count = sum(lower_text.count(term) for term in negative_terms)
+    positive_count = sum(lower_text.count(term) for term in positive_terms)
+    sentiment = "neutral"
+    if negative_count > positive_count:
+        sentiment = "negative"
+    elif positive_count > negative_count:
+        sentiment = "positive"
+
+    return [
+        NormalizedFact(
+            fact_type="news_sentiment",
+            entity_key=source_name,
+            value=sentiment,
+            source_name=source_name,
+        )
+    ]
+
+
+def _player_facts(text: str, *, source_name: str) -> list[NormalizedFact]:
+    squad_match = re.search(r"\b(?:squad|players?)\s*:\s*([^.;]+)", text, re.IGNORECASE)
+    if not squad_match:
+        return []
+
+    facts: list[NormalizedFact] = []
+    for raw_name in squad_match.group(1).split(","):
+        player_name = _clean_entity_name(raw_name)
+        if not player_name:
+            continue
+        facts.append(
+            NormalizedFact(
+                fact_type="player_presence",
+                entity_key=player_name,
+                value="listed",
+                source_name=source_name,
+            )
+        )
+
+    return facts
+
+
+def _clean_entity_name(value: str) -> str:
+    return re.sub(r"\s+", " ", value.strip(" -:,.")).strip()
+
+
+def _webpage_ingestion_message(facts: tuple[NormalizedFact, ...]) -> str:
+    if facts:
+        return f"Snapshot captured; extracted {len(facts)} normalized facts."
+
+    return "Snapshot captured; parser pending for this source."

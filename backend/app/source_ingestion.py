@@ -31,6 +31,7 @@ def ingest_source(
         result = HttpWebpageDataSourceAdapter(
             source_name=definition.name,
             url=definition.url,
+            category=definition.category,
             snapshot_dir=snapshot_dir,
             http_client=http_client,
         ).ingest_snapshot()

@@ -4,7 +4,11 @@ from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
-from app.data_sources import EspnScoreboardDataSourceAdapter, HttpWebpageDataSourceAdapter
+from app.data_sources import (
+    EspnScoreboardDataSourceAdapter,
+    HttpWebpageDataSourceAdapter,
+    SourceCategory,
+)
 from app.main import create_app
 
 
@@ -29,6 +33,14 @@ class FakeHttpClient:
 class BrokenHttpClient:
     def get(self, url, timeout):
         raise RuntimeError("network blocked")
+
+
+class UrlMappedHttpClient:
+    def __init__(self, content_by_url: dict[str, bytes]):
+        self.content_by_url = content_by_url
+
+    def get(self, url, timeout, headers=None):
+        return FakeResponse(self.content_by_url[url])
 
 
 def workspace_tmp() -> Path:
@@ -128,6 +140,72 @@ def write_sources_config(path: Path):
     )
 
 
+def write_two_injury_source_config(path: Path):
+    path.write_text(
+        json.dumps(
+            {
+                "schedule": [
+                    {
+                        "name": "manual-schedule",
+                        "url": "https://data-source.example/schedule.json",
+                        "priority": 1,
+                    }
+                ],
+                "team_form": [
+                    {
+                        "name": "manual-form",
+                        "url": "https://data-source.example/form.json",
+                        "priority": 1,
+                    }
+                ],
+                "ranking": [
+                    {
+                        "name": "manual-ranking",
+                        "url": "https://data-source.example/rankings.json",
+                        "priority": 1,
+                    }
+                ],
+                "injury": [
+                    {
+                        "name": "injury-primary",
+                        "url": "https://data-source.example/injury-primary.html",
+                        "priority": 1,
+                        "adapter": "webpage",
+                    },
+                    {
+                        "name": "injury-secondary",
+                        "url": "https://data-source.example/injury-secondary.html",
+                        "priority": 2,
+                        "adapter": "webpage",
+                    },
+                ],
+                "odds": [
+                    {
+                        "name": "manual-odds",
+                        "url": "https://data-source.example/odds.json",
+                        "priority": 1,
+                    }
+                ],
+                "news_sentiment": [
+                    {
+                        "name": "manual-news",
+                        "url": "https://data-source.example/news.json",
+                        "priority": 1,
+                    }
+                ],
+                "player": [
+                    {
+                        "name": "manual-player",
+                        "url": "https://data-source.example/players.json",
+                        "priority": 1,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
 def test_espn_scoreboard_adapter_saves_snapshot_and_parses_schedule_matches():
     tmp_path = workspace_tmp()
     http_client = FakeHttpClient(espn_scoreboard_payload())
@@ -156,14 +234,15 @@ def test_espn_scoreboard_adapter_saves_snapshot_and_parses_schedule_matches():
     assert result.matches[0].kickoff_at == "2026-06-11T19:00Z"
 
 
-def test_webpage_adapter_saves_html_snapshot_for_parser_pending_sources():
+def test_webpage_adapter_saves_html_snapshot_and_extracts_injury_facts():
     tmp_path = workspace_tmp()
     http_client = FakeHttpClient(
-        b"<html><title>World Cup injuries</title><body>Player doubtful</body></html>"
+        b"<html><title>World Cup injuries</title><body>Neymar is doubtful. Vinicius Junior suspended.</body></html>"
     )
     adapter = HttpWebpageDataSourceAdapter(
         source_name="transfermarkt-world-cup-2026-injuries",
         url="https://www.transfermarkt.com/world-cup-2026/verletztespieler/pokalwettbewerb/WM26",
+        category=SourceCategory.INJURY,
         snapshot_dir=tmp_path / "snapshots",
         http_client=http_client,
     )
@@ -171,10 +250,46 @@ def test_webpage_adapter_saves_html_snapshot_for_parser_pending_sources():
     result = adapter.ingest_snapshot()
 
     assert result.status == "ingested"
-    assert result.item_count == 1
+    assert result.item_count == 2
     assert result.snapshot is not None
     assert result.snapshot.path.suffix == ".html"
-    assert "parser pending" in result.message
+    assert result.facts[0].fact_type == "injury_availability"
+    assert result.facts[0].entity_key == "Neymar"
+    assert result.facts[0].value == "doubtful"
+
+
+def test_webpage_adapter_extracts_odds_news_sentiment_and_player_facts():
+    tmp_path = workspace_tmp()
+
+    odds_result = HttpWebpageDataSourceAdapter(
+        source_name="oddschecker-world-cup",
+        url="https://www.oddschecker.com/football/world-cup",
+        category=SourceCategory.ODDS,
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=FakeHttpClient(b"<html><body>Brazil 1.85 Draw 3.40 Croatia 4.20</body></html>"),
+    ).ingest_snapshot()
+    news_result = HttpWebpageDataSourceAdapter(
+        source_name="bbc-world-cup-football",
+        url="https://www.bbc.com/sport/football/world-cup",
+        category=SourceCategory.NEWS_SENTIMENT,
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=FakeHttpClient(b"<html><body>Brazil injury concern but Morocco confident</body></html>"),
+    ).ingest_snapshot()
+    player_result = HttpWebpageDataSourceAdapter(
+        source_name="fifa-world-cup-teams",
+        url="https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026/teams",
+        category=SourceCategory.PLAYER,
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=FakeHttpClient(b"<html><body>Squad: Neymar, Vinicius Junior</body></html>"),
+    ).ingest_snapshot()
+
+    assert odds_result.facts[0].fact_type == "decimal_odds"
+    assert odds_result.facts[0].entity_key == "Brazil"
+    assert odds_result.facts[0].value == 1.85
+    assert news_result.facts[0].fact_type == "news_sentiment"
+    assert news_result.facts[0].value == "negative"
+    assert player_result.facts[0].fact_type == "player_presence"
+    assert player_result.facts[0].entity_key == "Neymar"
 
 
 def test_sources_api_lists_configured_source_catalog():
@@ -219,11 +334,11 @@ def test_sources_api_ingests_espn_scoreboard_source():
     assert body["results"][0]["matches"][0]["away_team"] == "Canada"
 
 
-def test_sources_api_ingests_configured_webpage_snapshot_without_parsing_it():
+def test_sources_api_ingests_configured_webpage_snapshot_with_normalized_facts():
     tmp_path = workspace_tmp()
     config_path = tmp_path / "sources.json"
     write_sources_config(config_path)
-    http_client = FakeHttpClient(b"<html><body>Injury report</body></html>")
+    http_client = FakeHttpClient(b"<html><body>Neymar is doubtful</body></html>")
     client = TestClient(
         create_app(
             source_config_path=config_path,
@@ -243,6 +358,9 @@ def test_sources_api_ingests_configured_webpage_snapshot_without_parsing_it():
     assert body["results"][0]["status"] == "ingested"
     assert body["results"][0]["item_count"] == 1
     assert body["results"][0]["matches"] == []
+    assert body["results"][0]["facts"][0]["fact_type"] == "injury_availability"
+    assert body["results"][0]["facts"][0]["entity_key"] == "Neymar"
+    assert body["results"][0]["facts"][0]["value"] == "doubtful"
 
 
 def test_sources_api_reports_failed_source_without_failing_entire_ingestion():
@@ -267,3 +385,40 @@ def test_sources_api_reports_failed_source_without_failing_entire_ingestion():
     assert body["results"][0]["source_name"] == "manual-injury"
     assert body["results"][0]["status"] == "failed"
     assert "network blocked" in body["results"][0]["message"]
+
+
+def test_sources_validate_api_cross_checks_facts_by_source_priority():
+    tmp_path = workspace_tmp()
+    config_path = tmp_path / "sources.json"
+    write_two_injury_source_config(config_path)
+    http_client = UrlMappedHttpClient(
+        {
+            "https://data-source.example/injury-primary.html": (
+                b"<html><body>Neymar is doubtful</body></html>"
+            ),
+            "https://data-source.example/injury-secondary.html": (
+                b"<html><body>Neymar is available</body></html>"
+            ),
+        }
+    )
+    client = TestClient(
+        create_app(
+            source_config_path=config_path,
+            source_snapshot_dir=tmp_path / "snapshots",
+            source_http_client=http_client,
+        )
+    )
+
+    response = client.post("/sources/validate", json={"category": "injury"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert [result["status"] for result in body["results"]] == ["ingested", "ingested"]
+    assert body["validated_facts"][0]["fact_type"] == "injury_availability"
+    assert body["validated_facts"][0]["entity_key"] == "Neymar"
+    assert body["validated_facts"][0]["status"] == "conflicting"
+    assert body["validated_facts"][0]["value"] == "doubtful"
+    assert body["validated_facts"][0]["sources"] == [
+        "injury-primary",
+        "injury-secondary",
+    ]
