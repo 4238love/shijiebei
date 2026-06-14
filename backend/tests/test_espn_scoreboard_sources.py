@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from app.data_sources import (
     EspnScoreboardDataSourceAdapter,
+    EspnTeamRosterDiscoveryDataSourceAdapter,
     EspnTeamScheduleDiscoveryDataSourceAdapter,
     HttpWebpageDataSourceAdapter,
     SportsMoleInjuryDataSourceAdapter,
@@ -890,6 +891,75 @@ def test_webpage_adapter_extracts_team_listed_player_count_from_espn_squad_sourc
     }
 
 
+def test_espn_team_roster_discovery_fetches_rosters_from_team_index():
+    tmp_path = workspace_tmp()
+    teams_url = "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/teams"
+    brazil_roster_url = "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/teams/205/roster"
+    morocco_roster_url = "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/teams/2869/roster"
+    teams_payload = {
+        "sports": [
+            {
+                "leagues": [
+                    {
+                        "teams": [
+                            {"team": {"id": "205", "displayName": "Brazil"}},
+                            {"team": {"id": "2869", "displayName": "Morocco"}},
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+    http_client = UrlMappedHttpClient(
+        {
+            teams_url: json.dumps(teams_payload).encode(),
+            brazil_roster_url: json.dumps(
+                {
+                    "athletes": [
+                        {"displayName": "Neymar"},
+                        {"fullName": "Vinicius Junior"},
+                    ]
+                }
+            ).encode(),
+            morocco_roster_url: json.dumps(
+                {
+                    "athletes": [
+                        {"displayName": "Achraf Hakimi"},
+                    ]
+                }
+            ).encode(),
+        }
+    )
+
+    result = EspnTeamRosterDiscoveryDataSourceAdapter(
+        source_name="espn-world-cup-rosters",
+        url=teams_url,
+        category=SourceCategory.PLAYER,
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=http_client,
+    ).ingest_players()
+
+    assert http_client.requested_urls == [
+        teams_url,
+        brazil_roster_url,
+        morocco_roster_url,
+    ]
+    assert result.status == "ingested"
+    assert result.item_count == 2
+    assert ("player_presence", "Neymar", "listed") in {
+        (fact.fact_type, fact.entity_key, fact.value) for fact in result.facts
+    }
+    assert ("player_presence", "Achraf Hakimi", "listed") in {
+        (fact.fact_type, fact.entity_key, fact.value) for fact in result.facts
+    }
+    assert ("team_listed_player_count", "Brazil", 2) in {
+        (fact.fact_type, fact.entity_key, fact.value) for fact in result.facts
+    }
+    assert ("team_listed_player_count", "Morocco", 1) in {
+        (fact.fact_type, fact.entity_key, fact.value) for fact in result.facts
+    }
+
+
 def test_webpage_adapter_retries_without_browser_headers_when_waf_page_is_returned():
     tmp_path = workspace_tmp()
     http_client = WafThenDefaultHttpClient()
@@ -1213,6 +1283,57 @@ def test_source_ingestion_routes_espn_team_schedule_discovery_adapter():
     assert result.status == "ingested"
     assert result.item_count == 1
     assert ("team_match_result", "Brazil", "draw") in {
+        (fact.fact_type, fact.entity_key, fact.value) for fact in result.facts
+    }
+
+
+def test_source_ingestion_routes_espn_team_roster_discovery_adapter():
+    tmp_path = workspace_tmp()
+    teams_url = "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/teams"
+    roster_url = "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/teams/205/roster"
+    http_client = UrlMappedHttpClient(
+        {
+            teams_url: json.dumps(
+                {
+                    "sports": [
+                        {
+                            "leagues": [
+                                {
+                                    "teams": [
+                                        {"team": {"id": "205", "displayName": "Brazil"}}
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ).encode(),
+            roster_url: json.dumps(
+                {
+                    "athletes": [
+                        {"displayName": "Neymar"},
+                        {"displayName": "Alisson Becker"},
+                    ]
+                }
+            ).encode(),
+        }
+    )
+
+    result = ingest_source(
+        SourceDefinition(
+            category=SourceCategory.PLAYER,
+            name="espn-world-cup-rosters",
+            url=teams_url,
+            priority=1,
+            adapter="espn_team_rosters",
+        ),
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=http_client,
+    )
+
+    assert result.status == "ingested"
+    assert result.item_count == 1
+    assert ("team_listed_player_count", "Brazil", 2) in {
         (fact.fact_type, fact.entity_key, fact.value) for fact in result.facts
     }
 

@@ -118,23 +118,16 @@
   ],
   "player": [
     {
-      "name": "espn-brazil-squad",
-      "url": "https://www.espn.com/soccer/team/squad/_/id/205/brazil",
+      "name": "espn-world-cup-rosters",
+      "url": "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/teams",
       "priority": 1,
-      "adapter": "webpage",
-      "notes": "ESPN squad page used as first player-level extraction target."
-    },
-    {
-      "name": "espn-croatia-squad",
-      "url": "https://www.espn.com/soccer/team/squad/_/id/477/croatia",
-      "priority": 2,
-      "adapter": "webpage",
-      "notes": "ESPN squad page used to provide player-level depth for Croatia."
+      "adapter": "espn_team_rosters",
+      "notes": "Discovers World Cup team IDs from ESPN, fetches each team roster JSON endpoint, and extracts player-level squad facts."
     },
     {
       "name": "fifa-world-cup-teams",
       "url": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026/teams",
-      "priority": 3,
+      "priority": 2,
       "adapter": "webpage",
       "notes": "Official team list fallback."
     }

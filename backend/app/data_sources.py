@@ -381,6 +381,114 @@ class EspnTeamScheduleDiscoveryDataSourceAdapter:
         return httpx
 
 
+class EspnTeamRosterDiscoveryDataSourceAdapter:
+    max_team_rosters = 48
+
+    def __init__(
+        self,
+        *,
+        source_name: str,
+        url: str,
+        category: SourceCategory | None = SourceCategory.PLAYER,
+        snapshot_dir: Path,
+        http_client=None,
+        timeout_seconds: int = 10,
+    ):
+        self.source_name = source_name
+        self.url = url
+        self.category = category
+        self.snapshot_dir = Path(snapshot_dir)
+        self.http_client = http_client
+        self.timeout_seconds = timeout_seconds
+
+    def ingest_players(self) -> SourceIngestionResult:
+        snapshot = self.fetch_snapshot()
+        payload = json.loads(snapshot.path.read_text(encoding="utf-8"))
+        facts = tuple(
+            _espn_roster_facts_from_payload(
+                payload.get("team_rosters", []),
+                source_name=self.source_name,
+            )
+        )
+
+        return SourceIngestionResult(
+            source_name=self.source_name,
+            category=self.category,
+            status=SourceIngestionStatus.INGESTED,
+            item_count=len(payload.get("team_rosters", [])),
+            snapshot=snapshot,
+            facts=facts,
+            message=_webpage_ingestion_message(facts),
+        )
+
+    def fetch_snapshot(self) -> SourceSnapshot:
+        team_index_response = _http_get_webpage(
+            self._http_client(),
+            self.url,
+            timeout_seconds=self.timeout_seconds,
+        )
+        team_index_response.raise_for_status()
+        team_index_payload = json.loads(_decode_http_content(team_index_response.content))
+        team_entries = _espn_team_entries_from_index(team_index_payload)
+
+        team_rosters: list[dict] = []
+        errors: list[dict[str, str]] = []
+        for team in team_entries[: self.max_team_rosters]:
+            roster_url = _espn_team_roster_url(self.url, team_id=team["id"])
+            try:
+                roster_response = _http_get_webpage(
+                    self._http_client(),
+                    roster_url,
+                    timeout_seconds=self.timeout_seconds,
+                )
+                roster_response.raise_for_status()
+                team_rosters.append(
+                    {
+                        "team": team,
+                        "url": roster_url,
+                        "payload": json.loads(_decode_http_content(roster_response.content)),
+                    }
+                )
+            except Exception as error:
+                errors.append(
+                    {
+                        "team_id": team["id"],
+                        "team_name": team["name"],
+                        "url": roster_url,
+                        "error": str(error),
+                    }
+                )
+
+        payload = {
+            "source_url": self.url,
+            "team_index": team_index_payload,
+            "team_count": len(team_entries),
+            "team_rosters": team_rosters,
+            "errors": errors,
+        }
+        content = json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")
+        content_hash = sha256(content).hexdigest()
+        self.snapshot_dir.mkdir(parents=True, exist_ok=True)
+        snapshot_path = (
+            self.snapshot_dir / f"{_safe_name(self.source_name)}-{content_hash[:12]}.json"
+        )
+        snapshot_path.write_bytes(content)
+
+        return SourceSnapshot(
+            source_name=self.source_name,
+            path=snapshot_path,
+            content_hash=content_hash,
+        )
+
+    def _http_client(self):
+        if self.http_client is not None:
+            return self.http_client
+
+        import httpx
+
+        return httpx
+
+
 class HttpWebpageDataSourceAdapter:
     def __init__(
         self,
@@ -719,6 +827,67 @@ def _espn_team_schedule_url(teams_url: str, *, team_id: str) -> str:
     if re.search(r"/teams(?:\?.*)?$", teams_url):
         return re.sub(r"/teams(?:\?.*)?$", f"/teams/{team_id}/schedule", teams_url)
     return urljoin(teams_url.rstrip("/") + "/", f"{team_id}/schedule")
+
+
+def _espn_team_roster_url(teams_url: str, *, team_id: str) -> str:
+    if re.search(r"/teams(?:\?.*)?$", teams_url):
+        return re.sub(r"/teams(?:\?.*)?$", f"/teams/{team_id}/roster", teams_url)
+    return urljoin(teams_url.rstrip("/") + "/", f"{team_id}/roster")
+
+
+def _espn_roster_facts_from_payload(
+    team_rosters: list[dict],
+    *,
+    source_name: str,
+) -> list[NormalizedFact]:
+    facts: list[NormalizedFact] = []
+    seen_players: set[str] = set()
+    for roster in team_rosters:
+        team = roster.get("team", {})
+        team_name = _clean_entity_name(str(team.get("name") or ""))
+        player_names = _espn_roster_player_names(roster.get("payload", {}))
+        for player_name in player_names:
+            if player_name in seen_players:
+                continue
+            seen_players.add(player_name)
+            facts.append(
+                NormalizedFact(
+                    fact_type="player_presence",
+                    entity_key=player_name,
+                    value="listed",
+                    source_name=source_name,
+                )
+            )
+        if team_name:
+            facts.append(
+                NormalizedFact(
+                    fact_type="team_listed_player_count",
+                    entity_key=team_name,
+                    value=len(player_names),
+                    source_name=source_name,
+                )
+            )
+
+    return facts
+
+
+def _espn_roster_player_names(payload: dict) -> list[str]:
+    names: list[str] = []
+    seen: set[str] = set()
+    for athlete in payload.get("athletes", []):
+        player_name = (
+            athlete.get("displayName")
+            or athlete.get("fullName")
+            or athlete.get("shortName")
+            or athlete.get("name")
+            or ""
+        )
+        player_name = _clean_entity_name(str(player_name))
+        if not player_name or player_name in seen:
+            continue
+        seen.add(player_name)
+        names.append(player_name)
+    return names
 
 
 def _facts_from_espn_matches(

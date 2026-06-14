@@ -134,6 +134,9 @@ inverse.
 Player squad pages emit `player_presence` plus `team_listed_player_count` facts
 when a team can be inferred from text or source name. When both teams have squad
 counts, the Prediction Dataset applies a small squad-depth adjustment.
+The `espn_team_rosters` adapter can start from ESPN's team index, discover team
+IDs, fetch each roster JSON endpoint, and emit player-level facts without
+manually listing one squad page per team.
 
 Saved prediction records can be reviewed with their source-backed evidence:
 

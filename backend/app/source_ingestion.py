@@ -5,6 +5,7 @@ from pathlib import Path
 
 from app.data_sources import (
     EspnScoreboardDataSourceAdapter,
+    EspnTeamRosterDiscoveryDataSourceAdapter,
     EspnTeamScheduleDiscoveryDataSourceAdapter,
     HttpWebpageDataSourceAdapter,
     SportsMoleInjuryDataSourceAdapter,
@@ -39,6 +40,16 @@ def ingest_source(
             snapshot_dir=snapshot_dir,
             http_client=http_client,
         ).ingest_team_form()
+        return replace(result, category=definition.category)
+
+    if definition.adapter == "espn_team_rosters":
+        result = EspnTeamRosterDiscoveryDataSourceAdapter(
+            source_name=definition.name,
+            url=definition.url,
+            category=definition.category,
+            snapshot_dir=snapshot_dir,
+            http_client=http_client,
+        ).ingest_players()
         return replace(result, category=definition.category)
 
     if definition.adapter == "webpage":
