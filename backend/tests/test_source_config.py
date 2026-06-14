@@ -80,3 +80,14 @@ def test_local_source_config_uses_dedicated_transfermarkt_squad_adapter():
 
     assert len(transfermarkt_squad_sources) == 1
     assert transfermarkt_squad_sources[0].adapter == "transfermarkt_squads"
+
+
+def test_local_source_config_uses_dedicated_fifa_ranking_adapter():
+    config = load_source_catalog_config(Path("config/sources.local.json"))
+
+    fifa_ranking_sources = [
+        source for source in config.sources if source.name == "fifa-men-ranking"
+    ]
+
+    assert len(fifa_ranking_sources) == 1
+    assert fifa_ranking_sources[0].adapter == "fifa_ranking"

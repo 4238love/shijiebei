@@ -943,6 +943,74 @@ class OddsCheckerOddsDataSourceAdapter:
         return httpx
 
 
+class FifaRankingDataSourceAdapter:
+    def __init__(
+        self,
+        *,
+        source_name: str,
+        url: str,
+        category: SourceCategory | None = SourceCategory.RANKING,
+        snapshot_dir: Path,
+        http_client=None,
+        timeout_seconds: int = 10,
+    ):
+        self.source_name = source_name
+        self.url = url
+        self.category = category
+        self.snapshot_dir = Path(snapshot_dir)
+        self.http_client = http_client
+        self.timeout_seconds = timeout_seconds
+
+    def ingest_rankings(self) -> SourceIngestionResult:
+        snapshot = self.fetch_snapshot()
+        content = snapshot.path.read_text(encoding="utf-8", errors="ignore")
+        facts = tuple(
+            _fifa_ranking_facts_from_html(
+                content,
+                source_name=self.source_name,
+            )
+        )
+
+        return SourceIngestionResult(
+            source_name=self.source_name,
+            category=self.category,
+            status=SourceIngestionStatus.INGESTED,
+            item_count=len(facts),
+            snapshot=snapshot,
+            facts=facts,
+            message=_webpage_ingestion_message(facts),
+        )
+
+    def fetch_snapshot(self) -> SourceSnapshot:
+        response = _http_get_webpage(
+            self._http_client(),
+            self.url,
+            timeout_seconds=self.timeout_seconds,
+        )
+        response.raise_for_status()
+        content = response.content
+        content_hash = sha256(content).hexdigest()
+        self.snapshot_dir.mkdir(parents=True, exist_ok=True)
+        snapshot_path = (
+            self.snapshot_dir / f"{_safe_name(self.source_name)}-{content_hash[:12]}.html"
+        )
+        snapshot_path.write_bytes(content)
+
+        return SourceSnapshot(
+            source_name=self.source_name,
+            path=snapshot_path,
+            content_hash=content_hash,
+        )
+
+    def _http_client(self):
+        if self.http_client is not None:
+            return self.http_client
+
+        import httpx
+
+        return httpx
+
+
 class WorldFootballEloDataSourceAdapter:
     def __init__(
         self,
@@ -2568,6 +2636,115 @@ def _espn_player_anchor_facts(content: str, *, source_name: str) -> list[Normali
         )
 
     return facts
+
+
+def _fifa_ranking_facts_from_html(
+    content: str,
+    *,
+    source_name: str,
+) -> list[NormalizedFact]:
+    facts: list[NormalizedFact] = []
+    seen: set[str] = set()
+    for script_match in re.finditer(
+        r"<script\b[^>]*type=[\"']application/json[\"'][^>]*>(.*?)</script>",
+        content,
+        flags=re.IGNORECASE | re.DOTALL,
+    ):
+        raw_json = html.unescape(script_match.group(1)).strip()
+        if not raw_json:
+            continue
+        try:
+            payload = json.loads(raw_json)
+        except json.JSONDecodeError:
+            continue
+
+        for entry in _fifa_ranking_entries(payload):
+            team_name = _fifa_team_name_from_rank_entry(entry)
+            rank = _fifa_rank_from_entry(entry)
+            points = _fifa_points_from_entry(entry)
+            if team_name is None or rank is None or points is None or team_name in seen:
+                continue
+
+            seen.add(team_name)
+            facts.extend(
+                [
+                    NormalizedFact(
+                        fact_type="team_ranking_position",
+                        entity_key=team_name,
+                        value=rank,
+                        source_name=source_name,
+                    ),
+                    NormalizedFact(
+                        fact_type="team_rating",
+                        entity_key=team_name,
+                        value=points,
+                        source_name=source_name,
+                    ),
+                ]
+            )
+
+    if facts:
+        return facts
+
+    return _ranking_facts(_html_to_text(content), source_name=source_name)
+
+
+def _fifa_ranking_entries(value) -> list[dict]:
+    entries: list[dict] = []
+    if isinstance(value, dict):
+        if (
+            _fifa_rank_from_entry(value) is not None
+            and _fifa_team_name_from_rank_entry(value) is not None
+            and _fifa_points_from_entry(value) is not None
+        ):
+            entries.append(value)
+
+        for nested in value.values():
+            entries.extend(_fifa_ranking_entries(nested))
+    elif isinstance(value, list):
+        for nested in value:
+            entries.extend(_fifa_ranking_entries(nested))
+
+    return entries
+
+
+def _fifa_team_name_from_rank_entry(entry: dict) -> str | None:
+    for key in (
+        "teamName",
+        "countryName",
+        "name",
+        "team",
+        "country",
+    ):
+        value = entry.get(key)
+        if isinstance(value, str):
+            team_name = _clean_entity_name(value)
+            if team_name:
+                return team_name
+        if isinstance(value, dict):
+            team_name = _fifa_team_name_from_rank_entry(value)
+            if team_name:
+                return team_name
+
+    return None
+
+
+def _fifa_rank_from_entry(entry: dict) -> int | None:
+    for key in ("rank", "ranking", "position", "rankPosition"):
+        rank = _optional_int(entry.get(key))
+        if rank is not None:
+            return rank
+
+    return None
+
+
+def _fifa_points_from_entry(entry: dict) -> float | None:
+    for key in ("totalPoints", "points", "rating", "score"):
+        points = _optional_float(entry.get(key))
+        if points is not None:
+            return points
+
+    return None
 
 
 def _ranking_facts(text: str, *, source_name: str) -> list[NormalizedFact]:

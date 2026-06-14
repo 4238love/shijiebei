@@ -78,6 +78,9 @@ Webpage sources now return category-aware normalized facts when the static HTML 
 World Football Elo uses a dedicated adapter that snapshots `World.tsv` plus
 `en.teams.tsv`, maps country codes to team names, and emits `team_rating` /
 `team_ranking_position` facts.
+FIFA ranking uses a dedicated adapter for the official men's ranking page; it
+extracts embedded ranking JSON when present and falls back to static page text
+for `team_rating` / `team_ranking_position` facts.
 
 ESPN team schedule endpoints can be configured as `team_form` sources. The
 scoreboard adapter accepts both string scores and ESPN score objects, then keeps
@@ -193,6 +196,6 @@ on its configured target interval.
 FIFA, Transfermarkt, OddsPortal, OddsChecker, BBC, and Elo pages are configured
 as crawl targets. Dedicated parsers should be added as separate adapters when a
 source needs more than the generic webpage parser; current dedicated adapters
-cover ESPN discovery, Sports Mole injuries, Transfermarkt injuries, and World
-Football Elo, plus BetExplorer/OddsChecker match-card odds and Transfermarkt
-squad rows.
+cover ESPN discovery, FIFA ranking, Sports Mole injuries, Transfermarkt
+injuries, and World Football Elo, plus BetExplorer/OddsChecker match-card odds
+and Transfermarkt squad rows.

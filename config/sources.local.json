@@ -50,7 +50,7 @@
       "name": "fifa-men-ranking",
       "url": "https://inside.fifa.com/fifa-world-ranking/men",
       "priority": 1,
-      "adapter": "webpage",
+      "adapter": "fifa_ranking",
       "notes": "Official FIFA men's ranking page."
     },
     {

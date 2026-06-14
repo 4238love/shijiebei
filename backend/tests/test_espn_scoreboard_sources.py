@@ -9,6 +9,7 @@ from app.data_sources import (
     EspnScoreboardDataSourceAdapter,
     EspnTeamRosterDiscoveryDataSourceAdapter,
     EspnTeamScheduleDiscoveryDataSourceAdapter,
+    FifaRankingDataSourceAdapter,
     HttpWebpageDataSourceAdapter,
     OddsCheckerOddsDataSourceAdapter,
     SportsMoleInjuryDataSourceAdapter,
@@ -1530,6 +1531,36 @@ def test_webpage_ranking_parser_ignores_calendar_date_fragments():
     assert {fact.entity_key for fact in result.facts} == {"Brazil"}
 
 
+def test_fifa_ranking_adapter_extracts_embedded_team_rankings():
+    tmp_path = workspace_tmp()
+    result = FifaRankingDataSourceAdapter(
+        source_name="fifa-men-ranking",
+        url="https://inside.fifa.com/fifa-world-ranking/men",
+        category=SourceCategory.RANKING,
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=FakeHttpClient(
+            b"""
+            <html><script id="__NEXT_DATA__" type="application/json">
+            {"props":{"pageProps":{"ranking":[
+              {"rank":1,"teamName":"Argentina","totalPoints":1885.36},
+              {"rank":2,"countryName":"France","points":1867.71}
+            ]}}}
+            </script></html>
+            """
+        ),
+    ).ingest_rankings()
+
+    assert result.status == "ingested"
+    assert result.snapshot is not None
+    assert result.snapshot.path.suffix == ".html"
+    assert ("team_ranking_position", "Argentina", 1) in {
+        (fact.fact_type, fact.entity_key, fact.value) for fact in result.facts
+    }
+    assert ("team_rating", "France", 1867.71) in {
+        (fact.fact_type, fact.entity_key, fact.value) for fact in result.facts
+    }
+
+
 def test_world_football_elo_adapter_extracts_team_ratings_from_tsv_files():
     tmp_path = workspace_tmp()
     http_client = UrlMappedHttpClient(
@@ -1588,6 +1619,27 @@ def test_source_ingestion_routes_world_football_elo_adapter():
 
     assert result.status == "ingested"
     assert result.facts[0].entity_key == "Brazil"
+
+
+def test_source_ingestion_routes_fifa_ranking_adapter():
+    tmp_path = workspace_tmp()
+
+    result = ingest_source(
+        SourceDefinition(
+            category=SourceCategory.RANKING,
+            name="fifa-men-ranking",
+            url="https://inside.fifa.com/fifa-world-ranking/men",
+            priority=1,
+            adapter="fifa_ranking",
+        ),
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=FakeHttpClient(
+            b"<html><body>1 Argentina 1885.36 2 France 1867.71</body></html>"
+        ),
+    )
+
+    assert result.status == "ingested"
+    assert result.facts[0].entity_key == "Argentina"
 
 
 def test_source_ingestion_routes_espn_team_schedule_discovery_adapter():
