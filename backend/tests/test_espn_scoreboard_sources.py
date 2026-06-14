@@ -384,6 +384,36 @@ def test_webpage_adapter_extracts_team_unavailable_player_count():
     }
 
 
+def test_webpage_adapter_does_not_treat_look_out_copy_as_injury_absence():
+    tmp_path = workspace_tmp()
+    result = HttpWebpageDataSourceAdapter(
+        source_name="bbc-world-cup-football-injuries",
+        url="https://www.bbc.com/sport/football/world-cup",
+        category=SourceCategory.INJURY,
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=FakeHttpClient(
+            b"<html><body>Who are the Haiti players to look out for against Scotland?</body></html>"
+        ),
+    ).ingest_snapshot()
+
+    assert result.facts == ()
+
+
+def test_webpage_adapter_does_not_treat_article_title_colon_as_team_injury_segment():
+    tmp_path = workspace_tmp()
+    result = HttpWebpageDataSourceAdapter(
+        source_name="bbc-world-cup-football-injuries",
+        url="https://www.bbc.com/sport/football/world-cup",
+        category=SourceCategory.INJURY,
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=FakeHttpClient(
+            b"<html><body>Superstar in Spain, doubted in Brazil: Will Vinicius Jr convince a nation? Who are the Haiti players to look out for?</body></html>"
+        ),
+    ).ingest_snapshot()
+
+    assert result.facts == ()
+
+
 def test_webpage_adapter_extracts_odds_news_sentiment_and_player_facts():
     tmp_path = workspace_tmp()
 

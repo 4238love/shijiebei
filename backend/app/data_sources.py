@@ -710,7 +710,6 @@ def _injury_facts(text: str, *, source_name: str) -> list[NormalizedFact]:
         "available",
         "returning",
         "returns",
-        "out",
     )
     pattern = re.compile(
         rf"\b([A-Z][A-Za-z' -]{{1,48}}?)\s+(?:is\s+|was\s+)?({'|'.join(statuses)})\b",
@@ -778,7 +777,6 @@ def _team_unavailable_player_count_facts(
         "injured",
         "suspended",
         "unavailable",
-        "out",
     }
     facts: list[NormalizedFact] = []
     seen_teams: set[str] = set()
