@@ -44,10 +44,19 @@ type SourceSummaryPayload = {
   conflict_count: number;
 };
 
+type AIReportPayload = {
+  id: string;
+  provider_name: string;
+  model_name: string;
+  content: string;
+  input_summary: Record<string, unknown>;
+};
+
 type SourceBackedPredictionPayload = {
   prediction: PredictionPayload;
   dataset: PredictionDatasetPayload;
   source_summary: SourceSummaryPayload;
+  ai_report?: AIReportPayload | null;
 };
 
 type SourceCategoryOption = {
@@ -75,6 +84,8 @@ export function SourceBackedPredictionWorkbench({ backendReady }: Props) {
   const [awayTeam, setAwayTeam] = useState("Croatia");
   const [category, setCategory] = useState("");
   const [simulationCount, setSimulationCount] = useState(1000);
+  const [generateAIReport, setGenerateAIReport] = useState(false);
+  const [aiReportProvider, setAIReportProvider] = useState("gpt");
   const [prediction, setPrediction] =
     useState<SourceBackedPredictionPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -110,6 +121,8 @@ export function SourceBackedPredictionWorkbench({ backendReady }: Props) {
           category: category || undefined,
           simulation_count: simulationCount,
           seed: 20260614,
+          generate_ai_report: generateAIReport,
+          ai_report_provider: generateAIReport ? aiReportProvider : undefined,
         }),
       });
 
@@ -192,6 +205,25 @@ export function SourceBackedPredictionWorkbench({ backendReady }: Props) {
             required
           />
         </label>
+        <label className="checkbox-row">
+          <input
+            type="checkbox"
+            checked={generateAIReport}
+            onChange={(event) => setGenerateAIReport(event.target.checked)}
+          />
+          <span>Generate GPT/DeepSeek report after prediction</span>
+        </label>
+        <label>
+          <span className="label">AI report provider</span>
+          <select
+            value={aiReportProvider}
+            disabled={!generateAIReport}
+            onChange={(event) => setAIReportProvider(event.target.value)}
+          >
+            <option value="gpt">GPT</option>
+            <option value="deepseek">DeepSeek</option>
+          </select>
+        </label>
         <button disabled={!backendReady || isRunning} type="submit">
           {isRunning ? "Crawling and predicting" : "Run source prediction"}
         </button>
@@ -272,6 +304,19 @@ export function SourceBackedPredictionWorkbench({ backendReady }: Props) {
               <span>feeds Confidence Level</span>
             </article>
           </div>
+
+          {prediction.ai_report ? (
+            <div className="source-category">
+              <div className="source-category-header">
+                <p className="label">AI report</p>
+                <span>
+                  {prediction.ai_report.provider_name} /{" "}
+                  {prediction.ai_report.model_name}
+                </span>
+              </div>
+              <p className="summary compact">{prediction.ai_report.content}</p>
+            </div>
+          ) : null}
 
           <ol className="scorelines">
             {prediction.prediction.top_scorelines.map((scoreline) => (

@@ -6,6 +6,11 @@ from uuid import uuid4
 from fastapi import APIRouter, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 
+from app.ai_reports import (
+    generate_ai_analysis_report,
+    provider_for_name,
+    UnknownAIReportProvider,
+)
 from app.cross_source_validation import CrossSourceValidator, NormalizedFact, ValidatedFact
 from app.prediction_dataset_builder import build_prediction_dataset_from_validated_facts
 from app.prediction_engine import (
@@ -59,6 +64,8 @@ class CreatePredictionFromSourcesRequest(BaseModel):
     weight_version: WeightVersionPayload | None = None
     simulation_count: int = Field(default=10_000, gt=0)
     seed: int | None = None
+    generate_ai_report: bool = False
+    ai_report_provider: str | None = None
 
 
 class ScorelineResponse(BaseModel):
@@ -108,12 +115,21 @@ class ValidatedFactResponse(BaseModel):
     conflicting_values: dict[str, list[str]] = Field(default_factory=dict)
 
 
+class AIReportResponse(BaseModel):
+    id: str
+    provider_name: str
+    model_name: str
+    content: str
+    input_summary: dict[str, Any]
+
+
 class SourceBackedPredictionResponse(BaseModel):
     prediction: PredictionResponse
     dataset: PredictionDatasetPayload
     source_summary: SourceBackedPredictionSummary
     source_evidence: list[SourceEvidenceResponse] = Field(default_factory=list)
     validated_facts: list[ValidatedFactResponse] = Field(default_factory=list)
+    ai_report: AIReportResponse | None = None
 
 
 class PredictionHistoryItemResponse(BaseModel):
@@ -135,6 +151,7 @@ class PredictionRecordResponse(BaseModel):
     source_summary: SourceBackedPredictionSummary | None = None
     source_evidence: list[SourceEvidenceResponse] = Field(default_factory=list)
     validated_facts: list[ValidatedFactResponse] = Field(default_factory=list)
+    ai_report: AIReportResponse | None = None
 
 
 @router.get("", response_model=PredictionHistoryResponse)
@@ -220,6 +237,12 @@ async def create_prediction_from_sources(
     validated_fact_responses = [
         _validated_fact_response(fact) for fact in validated_facts
     ]
+    ai_report = _create_optional_ai_report(
+        payload=payload,
+        prediction=prediction,
+        validated_facts=validated_facts,
+        request=request,
+    )
     _prediction_repository(request).save(
         {
             **response.model_dump(),
@@ -231,6 +254,7 @@ async def create_prediction_from_sources(
             "validated_facts": [
                 fact.model_dump() for fact in validated_fact_responses
             ],
+            "ai_report": ai_report.model_dump() if ai_report else None,
         }
     )
 
@@ -240,6 +264,7 @@ async def create_prediction_from_sources(
         source_summary=source_summary,
         source_evidence=source_evidence,
         validated_facts=validated_fact_responses,
+        ai_report=ai_report,
     )
 
 
@@ -362,7 +387,47 @@ def _prediction_record_response(record: dict) -> PredictionRecordResponse:
             ValidatedFactResponse(**fact)
             for fact in record.get("validated_facts", [])
         ],
+        ai_report=(
+            AIReportResponse(**record["ai_report"])
+            if record.get("ai_report")
+            else None
+        ),
     )
+
+
+def _create_optional_ai_report(
+    *,
+    payload: CreatePredictionFromSourcesRequest,
+    prediction,
+    validated_facts: list[ValidatedFact],
+    request: Request,
+) -> AIReportResponse | None:
+    if not payload.generate_ai_report and payload.ai_report_provider is None:
+        return None
+
+    provider_name = payload.ai_report_provider or "gpt"
+    try:
+        provider = provider_for_name(provider_name)
+    except UnknownAIReportProvider as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(error),
+        ) from error
+
+    report = generate_ai_analysis_report(
+        prediction=prediction,
+        provider=provider,
+        validated_facts=validated_facts,
+    )
+    response = AIReportResponse(
+        id=str(uuid4()),
+        provider_name=report.provider_name,
+        model_name=report.model_name,
+        content=report.content,
+        input_summary=report.input_summary,
+    )
+    request.app.state.ai_report_repository.save(response.model_dump())
+    return response
 
 
 def _source_evidence_response(result) -> SourceEvidenceResponse:

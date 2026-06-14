@@ -64,12 +64,21 @@ type ValidatedFact = {
   conflicting_values: Record<string, string[]>;
 };
 
+type AIReport = {
+  id: string;
+  provider_name: string;
+  model_name: string;
+  content: string;
+  input_summary: Record<string, unknown>;
+};
+
 type PredictionRecord = {
   prediction: Prediction;
   dataset: PredictionDataset | null;
   source_summary: SourceSummary | null;
   source_evidence: SourceEvidence[];
   validated_facts: ValidatedFact[];
+  ai_report: AIReport | null;
 };
 
 type PageProps = {
@@ -214,6 +223,22 @@ export default async function PredictionDetailPage({ params }: PageProps) {
             <strong>{dataset.home_advantage.toFixed(3)}</strong>
             <span>{dataset.conflict_count} conflict penalty</span>
           </article>
+        </section>
+      ) : null}
+
+      {record.ai_report ? (
+        <section className="source-category">
+          <div className="source-category-header">
+            <p className="label">AI report</p>
+            <span>
+              {record.ai_report.provider_name} / {record.ai_report.model_name}
+            </span>
+          </div>
+          <p className="summary compact">{record.ai_report.content}</p>
+          <p className="summary compact">
+            Report ID <code>{record.ai_report.id}</code>. This report is
+            review-only and does not mutate the Prediction Engine probabilities.
+          </p>
         </section>
       ) : null}
 

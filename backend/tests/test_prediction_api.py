@@ -198,6 +198,69 @@ def test_create_match_prediction_from_sources():
     assert detail["validated_facts"] == body["validated_facts"]
 
 
+def test_create_match_prediction_from_sources_can_generate_ai_report():
+    tmp_path = workspace_tmp()
+    config_path = tmp_path / "sources.json"
+    ranking_url = "https://data-source.example/ranking.html"
+    config_path.write_text(
+        """
+        {
+          "ranking": [
+            {
+              "name": "ranking-source",
+              "url": "https://data-source.example/ranking.html",
+              "priority": 1,
+              "adapter": "webpage"
+            }
+          ]
+        }
+        """,
+        encoding="utf-8",
+    )
+    client = TestClient(
+        create_app(
+            source_config_path=config_path,
+            source_snapshot_dir=tmp_path / "snapshots",
+            source_http_client=UrlMappedHttpClient(
+                {
+                    ranking_url: b"<html><body>1 Brazil 2082 12 Croatia 1900</body></html>",
+                }
+            ),
+        )
+    )
+
+    response = client.post(
+        "/predictions/from-sources",
+        json={
+            "home_team": "Brazil",
+            "away_team": "Croatia",
+            "category": "ranking",
+            "simulation_count": 1_000,
+            "seed": 20260614,
+            "generate_ai_report": True,
+            "ai_report_provider": "gpt",
+        },
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["ai_report"]["id"]
+    assert body["ai_report"]["provider_name"] == "gpt"
+    assert "Brazil vs Croatia" in body["ai_report"]["content"]
+    assert (
+        body["ai_report"]["input_summary"]["probabilities"]
+        == body["prediction"]["probabilities"]
+    )
+
+    detail_response = client.get(f"/predictions/{body['prediction']['id']}/record")
+    standalone_report_response = client.get(f"/ai-reports/{body['ai_report']['id']}")
+
+    assert detail_response.status_code == 200
+    assert detail_response.json()["ai_report"] == body["ai_report"]
+    assert standalone_report_response.status_code == 200
+    assert standalone_report_response.json() == body["ai_report"]
+
+
 def test_create_match_prediction_from_odds_sources_uses_market_prices():
     tmp_path = workspace_tmp()
     config_path = tmp_path / "sources.json"

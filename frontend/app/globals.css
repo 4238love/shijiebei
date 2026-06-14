@@ -250,6 +250,21 @@ h2 {
   opacity: 0.58;
 }
 
+.prediction-form .checkbox-row {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.prediction-form .checkbox-row input {
+  width: auto;
+  min-height: 0;
+  accent-color: var(--accent);
+}
+
 .prediction-scope {
   margin: 0;
 }

@@ -7,10 +7,10 @@ This map summarizes the current implementation using the project glossary.
 - `docker-compose.yml` defines the Docker Compose web system: `frontend`, `backend`, and `postgres`.
 - `backend/app/main.py` creates the FastAPI app and mounts public API seams.
 - `frontend/app/page.tsx` renders health status and mounts the live prediction workbench.
-- `frontend/app/source-backed-prediction-workbench.tsx` lets an operator pick teams/source scope and run source-backed predictions from the browser.
+- `frontend/app/source-backed-prediction-workbench.tsx` lets an operator pick teams/source scope, optionally request a GPT/DeepSeek report, and run source-backed predictions from the browser.
 - `frontend/app/api/predictions/from-sources/route.ts` proxies browser requests to backend `POST /predictions/from-sources`.
 - `frontend/app/predictions/page.tsx` renders saved prediction history from backend `GET /predictions`.
-- `frontend/app/predictions/[id]/page.tsx` renders the saved Prediction Dataset, source summary, and Source Snapshot evidence for a single run.
+- `frontend/app/predictions/[id]/page.tsx` renders the saved Prediction Dataset, optional AI report, source summary, and Source Snapshot evidence for a single run.
 - `frontend/app/jobs/page.tsx` and `frontend/app/jobs/jobs-dashboard.tsx` render the pipeline job control room.
 - `frontend/app/api/jobs/` proxies job status and run requests from the browser to the backend.
 - `frontend/app/methodology/page.tsx` renders the technical methodology page.
@@ -27,6 +27,7 @@ This map summarizes the current implementation using the project glossary.
 
 - `backend/app/prediction_api.py`
   - Exposes `GET /predictions`, `POST /predictions`, `POST /predictions/from-sources`, `GET /predictions/{id}`, and `GET /predictions/{id}/record`.
+  - `POST /predictions/from-sources` can persist a review-only AI report in the prediction record and standalone AI Report Repository.
 
 - `backend/app/prediction_repository.py`
   - Owns the Prediction Repository seam used by `prediction_api.py`.
@@ -51,7 +52,7 @@ This map summarizes the current implementation using the project glossary.
 
 - `backend/app/ai_reports.py`
   - Owns AI Analysis Report generation.
-  - DeepSeek/GPT provider adapters receive structured copies of prediction data and cannot mutate probabilities or active weights.
+  - DeepSeek/GPT provider adapters receive structured copies of prediction data and cannot mutate probabilities, active weights, or source facts.
 
 - `backend/app/ai_report_repository.py`
   - Owns the AI Analysis Report repository seam.

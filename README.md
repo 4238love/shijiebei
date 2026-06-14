@@ -113,6 +113,8 @@ $body = @{
   away_team = "Croatia"
   simulation_count = 10000
   seed = 20260614
+  generate_ai_report = $true
+  ai_report_provider = "gpt"
 } | ConvertTo-Json
 Invoke-RestMethod -Method Post -Uri http://localhost:8000/predictions/from-sources -ContentType "application/json" -Body $body
 ```
@@ -121,6 +123,11 @@ The homepage includes the same flow behind a browser form. Choose home/away team
 
 - Browser route: `POST /api/predictions/from-sources`
 - Backend route: `POST /predictions/from-sources`
+
+Set `generate_ai_report=true` with `ai_report_provider` as `gpt` or `deepseek`
+to persist a review-only AI report alongside the source-backed prediction.
+The report stores the Prediction Engine output and validated facts as
+`input_summary`; it does not change probabilities, weights, or source facts.
 
 `decimal_odds` facts now influence the Prediction Dataset when both teams have
 market prices: lower decimal odds increase the team's market strength factor,

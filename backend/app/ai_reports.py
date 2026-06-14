@@ -51,6 +51,26 @@ class AIAnalysisReport:
     input_summary: dict
 
 
+class UnknownAIReportProvider(ValueError):
+    pass
+
+
+class TemplateAIReportProvider:
+    def __init__(self, config: AIProviderConfig):
+        self.provider_name = config.provider_name
+        self.model_name = config.model_name
+
+    def generate_report(self, payload: dict) -> str:
+        probabilities = payload["probabilities"]
+        strongest_outcome = max(probabilities.items(), key=lambda item: item[1])[0]
+        return (
+            f"{payload['match']} report from {self.provider_name}/{self.model_name}: "
+            f"strongest statistical outcome is {strongest_outcome}; "
+            f"confidence level {payload['confidence_level']}; "
+            f"{len(payload['conflict_statuses'])} validated source facts reviewed."
+        )
+
+
 class OpenAICompatibleAIReportProvider:
     def __init__(
         self,
@@ -94,6 +114,22 @@ class OpenAICompatibleAIReportProvider:
         import httpx
 
         return httpx
+
+
+def provider_for_name(provider_name: str) -> AIReportProvider:
+    if provider_name == "deepseek":
+        config = AIProviderConfig.deepseek()
+    elif provider_name == "gpt":
+        config = AIProviderConfig.gpt()
+    else:
+        raise UnknownAIReportProvider(
+            "Only deepseek and gpt providers are supported"
+        )
+
+    if os.getenv("AI_REPORT_MODE") == "live":
+        return OpenAICompatibleAIReportProvider(config)
+
+    return TemplateAIReportProvider(config)
 
 
 def generate_ai_analysis_report(

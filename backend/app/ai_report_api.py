@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from typing import Any
 from uuid import uuid4
 
@@ -9,10 +8,9 @@ from pydantic import BaseModel, Field
 
 from app.ai_report_repository import AIReportRepository
 from app.ai_reports import (
-    AIAnalysisReport,
-    AIProviderConfig,
-    OpenAICompatibleAIReportProvider,
     generate_ai_analysis_report,
+    provider_for_name,
+    UnknownAIReportProvider,
 )
 from app.cross_source_validation import ConflictStatus, ValidatedFact
 from app.prediction_engine import MatchPrediction, ScorelineProbability
@@ -60,22 +58,6 @@ class AIReportResponse(BaseModel):
     input_summary: dict
 
 
-class TemplateAIReportProvider:
-    def __init__(self, config: AIProviderConfig):
-        self.provider_name = config.provider_name
-        self.model_name = config.model_name
-
-    def generate_report(self, payload: dict) -> str:
-        probabilities = payload["probabilities"]
-        strongest_outcome = max(probabilities.items(), key=lambda item: item[1])[0]
-        return (
-            f"{payload['match']} report from {self.provider_name}/{self.model_name}: "
-            f"strongest statistical outcome is {strongest_outcome}; "
-            f"confidence level {payload['confidence_level']}; "
-            f"{len(payload['conflict_statuses'])} validated source facts reviewed."
-        )
-
-
 @router.post("", status_code=status.HTTP_201_CREATED, response_model=AIReportResponse)
 async def create_ai_report(payload: CreateAIReportRequest, request: Request):
     provider = _provider(payload.provider_name)
@@ -102,20 +84,13 @@ async def get_ai_report(report_id: str, request: Request):
 
 
 def _provider(provider_name: str):
-    if provider_name == "deepseek":
-        config = AIProviderConfig.deepseek()
-    elif provider_name == "gpt":
-        config = AIProviderConfig.gpt()
-    else:
+    try:
+        return provider_for_name(provider_name)
+    except UnknownAIReportProvider as error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only deepseek and gpt providers are supported",
-        )
-
-    if os.getenv("AI_REPORT_MODE") == "live":
-        return OpenAICompatibleAIReportProvider(config)
-
-    return TemplateAIReportProvider(config)
+            detail=str(error),
+        ) from error
 
 
 def _prediction(payload: MatchPredictionPayload) -> MatchPrediction:
