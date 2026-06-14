@@ -330,6 +330,99 @@ class HttpWebpageDataSourceAdapter:
         return httpx
 
 
+class SportsMoleInjuryDataSourceAdapter:
+    max_articles = 12
+
+    def __init__(
+        self,
+        *,
+        source_name: str,
+        url: str,
+        category: SourceCategory | None = SourceCategory.INJURY,
+        snapshot_dir: Path,
+        http_client=None,
+        timeout_seconds: int = 10,
+    ):
+        self.source_name = source_name
+        self.url = url
+        self.category = category
+        self.snapshot_dir = Path(snapshot_dir)
+        self.http_client = http_client
+        self.timeout_seconds = timeout_seconds
+
+    def ingest_injuries(self) -> SourceIngestionResult:
+        snapshot = self.fetch_snapshot()
+        payload = json.loads(snapshot.path.read_text(encoding="utf-8"))
+        facts = tuple(
+            _sportsmole_injury_facts_from_articles(
+                payload.get("articles", []),
+                source_name=self.source_name,
+            )
+        )
+
+        return SourceIngestionResult(
+            source_name=self.source_name,
+            category=self.category,
+            status=SourceIngestionStatus.INGESTED,
+            item_count=len(payload.get("articles", [])),
+            snapshot=snapshot,
+            facts=facts,
+            message=_webpage_ingestion_message(facts),
+        )
+
+    def fetch_snapshot(self) -> SourceSnapshot:
+        listing_response = _http_get_webpage(
+            self._http_client(),
+            self.url,
+            timeout_seconds=self.timeout_seconds,
+        )
+        listing_response.raise_for_status()
+        listing_html = _decode_http_content(listing_response.content)
+        article_urls = _sportsmole_injury_article_urls(listing_html, base_url=self.url)
+        articles: list[dict[str, str]] = []
+        for article_url in article_urls[: self.max_articles]:
+            article_response = _http_get_webpage(
+                self._http_client(),
+                article_url,
+                timeout_seconds=self.timeout_seconds,
+            )
+            article_response.raise_for_status()
+            articles.append(
+                {
+                    "url": article_url,
+                    "content": _decode_http_content(article_response.content),
+                }
+            )
+
+        payload = {
+            "source_url": self.url,
+            "listing_html": listing_html,
+            "article_urls": article_urls,
+            "articles": articles,
+        }
+        content = json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")
+        content_hash = sha256(content).hexdigest()
+        self.snapshot_dir.mkdir(parents=True, exist_ok=True)
+        snapshot_path = (
+            self.snapshot_dir / f"{_safe_name(self.source_name)}-{content_hash[:12]}.json"
+        )
+        snapshot_path.write_bytes(content)
+
+        return SourceSnapshot(
+            source_name=self.source_name,
+            path=snapshot_path,
+            content_hash=content_hash,
+        )
+
+    def _http_client(self):
+        if self.http_client is not None:
+            return self.http_client
+
+        import httpx
+
+        return httpx
+
+
 class WorldFootballEloDataSourceAdapter:
     def __init__(
         self,
@@ -634,6 +727,12 @@ def _http_get_webpage(http_client, url: str, *, timeout_seconds: int):
         return http_client.get(url, timeout=timeout_seconds)
 
 
+def _decode_http_content(content) -> str:
+    if isinstance(content, str):
+        return content
+    return content.decode("utf-8", errors="ignore")
+
+
 def _looks_like_aws_waf(response) -> bool:
     content = getattr(response, "content", b"")
     if isinstance(content, str):
@@ -860,6 +959,161 @@ def _injury_facts(text: str, *, source_name: str) -> list[NormalizedFact]:
         ]
 
     return []
+
+
+def _sportsmole_injury_article_urls(content: str, *, base_url: str) -> list[str]:
+    urls: list[str] = []
+    seen: set[str] = set()
+    pattern = re.compile(
+        r"href=[\"']([^\"']*world-cup-2026/team-news/[^\"']*injury-suspension-list[^\"']*\.html)",
+        re.IGNORECASE,
+    )
+    for match in pattern.finditer(content):
+        article_url = urljoin(base_url, html.unescape(match.group(1)))
+        if article_url in seen:
+            continue
+        seen.add(article_url)
+        urls.append(article_url)
+
+    return urls
+
+
+def _sportsmole_injury_facts_from_articles(
+    articles: list[dict],
+    *,
+    source_name: str,
+) -> list[NormalizedFact]:
+    player_facts: list[NormalizedFact] = []
+    seen_players: set[tuple[str, str]] = set()
+    team_unavailable_counts: dict[str, int] = {}
+
+    for article in articles:
+        content = str(article.get("content", ""))
+        article_facts, article_counts = _sportsmole_injury_facts_from_article(
+            content,
+            source_name=source_name,
+        )
+        for fact in article_facts:
+            key = (fact.entity_key, str(fact.value))
+            if key in seen_players:
+                continue
+            seen_players.add(key)
+            player_facts.append(fact)
+        for team_name, count in article_counts.items():
+            team_unavailable_counts[team_name] = max(
+                count,
+                team_unavailable_counts.get(team_name, 0),
+            )
+
+    team_facts = [
+        NormalizedFact(
+            fact_type="team_unavailable_player_count",
+            entity_key=team_name,
+            value=count,
+            source_name=source_name,
+        )
+        for team_name, count in sorted(team_unavailable_counts.items())
+    ]
+    return [*player_facts, *team_facts]
+
+
+def _sportsmole_injury_facts_from_article(
+    content: str,
+    *,
+    source_name: str,
+) -> tuple[list[NormalizedFact], dict[str, int]]:
+    headers = [
+        {
+            "start": match.start(),
+            "end": match.end(),
+            "text": _html_to_text(match.group(1)),
+        }
+        for match in re.finditer(
+            r"<h2\b[^>]*>(.*?)</h2>",
+            content,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+    ]
+    facts: list[NormalizedFact] = []
+    team_counts: dict[str, int] = {}
+
+    for index, header in enumerate(headers):
+        team_name = _sportsmole_team_heading(header["text"])
+        if not team_name:
+            continue
+        next_start = headers[index + 1]["start"] if index + 1 < len(headers) else len(content)
+        section = content[header["end"] : next_start]
+        status_entries = _sportsmole_status_entries(section)
+        if not status_entries:
+            continue
+
+        unavailable_count = 0
+        for status, value_html in status_entries:
+            player_names = _sportsmole_status_player_names(value_html)
+            if status in {"out", "doubtful", "suspended"}:
+                unavailable_count += len(player_names)
+            for player_name in player_names:
+                facts.append(
+                    NormalizedFact(
+                        fact_type="injury_availability",
+                        entity_key=player_name,
+                        value=status,
+                        source_name=source_name,
+                    )
+                )
+        team_counts[team_name] = unavailable_count
+
+    return facts, team_counts
+
+
+def _sportsmole_team_heading(value: str) -> str | None:
+    team_name = _clean_entity_name(value)
+    if not team_name:
+        return None
+    lowered = team_name.lower()
+    if " vs" in lowered or " v " in lowered or "sports mole" in lowered:
+        return None
+    return _title_case_team_name(team_name)
+
+
+def _sportsmole_status_entries(section: str) -> list[tuple[str, str]]:
+    entries: list[tuple[str, str]] = []
+    pattern = re.compile(
+        r"<p\b[^>]*>\s*<strong\b[^>]*>\s*(Out|Doubtful|Suspended)\s*:?\s*(?:&nbsp;)?\s*</strong>\s*(.*?)</p>",
+        re.IGNORECASE | re.DOTALL,
+    )
+    for match in pattern.finditer(section):
+        status = match.group(1).lower()
+        entries.append((status, match.group(2)))
+    return entries
+
+
+def _sportsmole_status_player_names(value_html: str) -> list[str]:
+    value_text = _html_to_text(value_html)
+    if not value_text or value_text.lower().startswith("none"):
+        return []
+
+    names = [
+        _clean_entity_name(_html_to_text(match.group(1)))
+        for match in re.finditer(
+            r"<a\b[^>]*>(.*?)</a>",
+            value_html,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+    ]
+    return [name for name in names if name]
+
+
+def _title_case_team_name(value: str) -> str:
+    special_tokens = {"D.R.": "D.R.", "DR": "DR", "USA": "USA", "UAE": "UAE"}
+    words = []
+    for word in value.split():
+        upper_word = word.upper()
+        if upper_word in special_tokens:
+            words.append(special_tokens[upper_word])
+        else:
+            words.append(word.capitalize())
+    return " ".join(words)
 
 
 def _team_unavailable_player_count_facts(

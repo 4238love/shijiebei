@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from app.data_sources import (
     EspnScoreboardDataSourceAdapter,
     HttpWebpageDataSourceAdapter,
+    SportsMoleInjuryDataSourceAdapter,
     SourceCategory,
     WorldFootballEloDataSourceAdapter,
 )
@@ -425,6 +426,64 @@ def test_webpage_adapter_extracts_team_unavailable_player_count():
     assert ("team_unavailable_player_count", "Croatia", 0) in {
         (fact.fact_type, fact.entity_key, fact.value) for fact in result.facts
     }
+
+
+def test_sportsmole_injury_adapter_crawls_articles_and_extracts_team_sections():
+    tmp_path = workspace_tmp()
+    listing_url = "https://www.sportsmole.co.uk/football/world-cup-2026/injuries-and-suspensions.html"
+    article_url = (
+        "https://www.sportsmole.co.uk/football/sweden/world-cup-2026/team-news/"
+        "sweden-vs-tunisia-injury-suspension-list-predicted-xis_599053.html"
+    )
+    http_client = UrlMappedHttpClient(
+        {
+            listing_url: f"""
+            <html><body>
+              <a href="/football/sweden/world-cup-2026/team-news/sweden-vs-tunisia-injury-suspension-list-predicted-xis_599053.html">
+                Sweden vs. Tunisia injury, suspension list, predicted XIs
+              </a>
+            </body></html>
+            """.encode(),
+            article_url: b"""
+            <html><body>
+              <h2><a href="/football/world-cup/sweden-vs-tunisia_game_248733.html">SWEDEN vs. TUNISIA</a></h2>
+              <h2>SWEDEN</h2>
+              <p><strong>Out:&nbsp;</strong>None</p>
+              <p><strong>Doubtful:&nbsp;</strong><a href="/people/gabriel-gudmundsson/">Gabriel Gudmundsson</a> (illness)</p>
+              <h2>TUNISIA</h2>
+              <p><strong>Out:&nbsp;</strong>None</p>
+              <p><strong>Doubtful:&nbsp;</strong>None</p>
+            </body></html>
+            """,
+        }
+    )
+
+    result = SportsMoleInjuryDataSourceAdapter(
+        source_name="sportsmole-world-cup-injuries",
+        url=listing_url,
+        category=SourceCategory.INJURY,
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=http_client,
+    ).ingest_injuries()
+
+    assert http_client.requested_urls == [listing_url, article_url]
+    assert result.status == "ingested"
+    assert result.item_count == 1
+    assert (
+        "injury_availability",
+        "Gabriel Gudmundsson",
+        "doubtful",
+    ) in {(fact.fact_type, fact.entity_key, fact.value) for fact in result.facts}
+    assert (
+        "team_unavailable_player_count",
+        "Sweden",
+        1,
+    ) in {(fact.fact_type, fact.entity_key, fact.value) for fact in result.facts}
+    assert (
+        "team_unavailable_player_count",
+        "Tunisia",
+        0,
+    ) in {(fact.fact_type, fact.entity_key, fact.value) for fact in result.facts}
 
 
 def test_webpage_adapter_does_not_treat_look_out_copy_as_injury_absence():
@@ -849,6 +908,45 @@ def test_source_ingestion_routes_world_football_elo_adapter():
 
     assert result.status == "ingested"
     assert result.facts[0].entity_key == "Brazil"
+
+
+def test_source_ingestion_routes_sportsmole_injury_adapter():
+    tmp_path = workspace_tmp()
+    listing_url = "https://www.sportsmole.co.uk/football/world-cup-2026/injuries-and-suspensions.html"
+    article_url = (
+        "https://www.sportsmole.co.uk/football/sweden/world-cup-2026/team-news/"
+        "sweden-vs-tunisia-injury-suspension-list-predicted-xis_599053.html"
+    )
+    http_client = UrlMappedHttpClient(
+        {
+            listing_url: (
+                b'<html><body><a href="/football/sweden/world-cup-2026/team-news/'
+                b'sweden-vs-tunisia-injury-suspension-list-predicted-xis_599053.html">'
+                b"Sweden vs. Tunisia injury, suspension list, predicted XIs</a></body></html>"
+            ),
+            article_url: (
+                b"<html><body><h2>SWEDEN</h2>"
+                b"<p><strong>Out:&nbsp;</strong>None</p>"
+                b"<p><strong>Doubtful:&nbsp;</strong>None</p></body></html>"
+            ),
+        }
+    )
+
+    result = ingest_source(
+        SourceDefinition(
+            category=SourceCategory.INJURY,
+            name="sportsmole-world-cup-injuries",
+            url=listing_url,
+            priority=1,
+            adapter="sportsmole_injuries",
+        ),
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=http_client,
+    )
+
+    assert result.status == "ingested"
+    assert result.facts[0].fact_type == "team_unavailable_player_count"
+    assert result.facts[0].entity_key == "Sweden"
 
 
 def test_sources_api_lists_configured_source_catalog():

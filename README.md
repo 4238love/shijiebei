@@ -78,6 +78,11 @@ Schedule webpage sources can parse Schema.org `SportsEvent` JSON-LD blocks into
 OddsPortal schedule fallback so ESPN schedule facts can be cross-checked against
 a second website when static event metadata is available.
 
+Sports Mole injury sources use a dedicated crawler: the adapter snapshots the
+World Cup injury index, follows article links, then parses team
+`Out`/`Doubtful`/`Suspended` sections into `injury_availability` and
+`team_unavailable_player_count` facts.
+
 Run a category validation pass to ingest all matching sources and cross-check facts by source priority:
 
 ```powershell

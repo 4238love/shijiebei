@@ -6,6 +6,7 @@ from pathlib import Path
 from app.data_sources import (
     EspnScoreboardDataSourceAdapter,
     HttpWebpageDataSourceAdapter,
+    SportsMoleInjuryDataSourceAdapter,
     SourceIngestionResult,
     SourceIngestionStatus,
     WorldFootballEloDataSourceAdapter,
@@ -37,6 +38,16 @@ def ingest_source(
             snapshot_dir=snapshot_dir,
             http_client=http_client,
         ).ingest_snapshot()
+        return replace(result, category=definition.category)
+
+    if definition.adapter == "sportsmole_injuries":
+        result = SportsMoleInjuryDataSourceAdapter(
+            source_name=definition.name,
+            url=definition.url,
+            category=definition.category,
+            snapshot_dir=snapshot_dir,
+            http_client=http_client,
+        ).ingest_injuries()
         return replace(result, category=definition.category)
 
     if definition.adapter == "world_football_elo":
