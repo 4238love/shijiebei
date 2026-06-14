@@ -73,7 +73,7 @@
       "name": "transfermarkt-world-cup-2026-injuries",
       "url": "https://www.transfermarkt.com/world-cup-2026/verletztespieler/pokalwettbewerb/WM26",
       "priority": 2,
-      "adapter": "webpage",
+      "adapter": "transfermarkt_injuries",
       "notes": "Secondary injury and suspension crawl target for cross-checking Sports Mole and news-feed availability signals."
     },
     {

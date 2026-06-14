@@ -11,6 +11,7 @@ from app.data_sources import (
     SportsMoleInjuryDataSourceAdapter,
     SourceIngestionResult,
     SourceIngestionStatus,
+    TransfermarktInjuryDataSourceAdapter,
     WorldFootballEloDataSourceAdapter,
 )
 from app.source_config import SourceDefinition
@@ -64,6 +65,16 @@ def ingest_source(
 
     if definition.adapter == "sportsmole_injuries":
         result = SportsMoleInjuryDataSourceAdapter(
+            source_name=definition.name,
+            url=definition.url,
+            category=definition.category,
+            snapshot_dir=snapshot_dir,
+            http_client=http_client,
+        ).ingest_injuries()
+        return replace(result, category=definition.category)
+
+    if definition.adapter == "transfermarkt_injuries":
+        result = TransfermarktInjuryDataSourceAdapter(
             source_name=definition.name,
             url=definition.url,
             category=definition.category,

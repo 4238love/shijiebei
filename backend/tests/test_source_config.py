@@ -32,3 +32,16 @@ def test_local_source_config_includes_committed_cross_check_websites():
         "eloratings.net",
     ]:
         assert hostname in urls
+
+
+def test_local_source_config_uses_dedicated_transfermarkt_injury_adapter():
+    config = load_source_catalog_config(Path("config/sources.local.json"))
+
+    transfermarkt_injury_sources = [
+        source
+        for source in config.sources
+        if source.name == "transfermarkt-world-cup-2026-injuries"
+    ]
+
+    assert len(transfermarkt_injury_sources) == 1
+    assert transfermarkt_injury_sources[0].adapter == "transfermarkt_injuries"

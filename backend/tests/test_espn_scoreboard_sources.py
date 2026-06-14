@@ -11,6 +11,7 @@ from app.data_sources import (
     HttpWebpageDataSourceAdapter,
     SportsMoleInjuryDataSourceAdapter,
     SourceCategory,
+    TransfermarktInjuryDataSourceAdapter,
     WorldFootballEloDataSourceAdapter,
 )
 from app.main import create_app
@@ -795,6 +796,61 @@ def test_sportsmole_injury_adapter_crawls_articles_and_extracts_team_sections():
     ) in {(fact.fact_type, fact.entity_key, fact.value) for fact in result.facts}
 
 
+def test_transfermarkt_injury_adapter_extracts_rows_and_team_counts():
+    tmp_path = workspace_tmp()
+    url = "https://www.transfermarkt.com/world-cup-2026/verletztespieler/pokalwettbewerb/WM26"
+    result = TransfermarktInjuryDataSourceAdapter(
+        source_name="transfermarkt-world-cup-2026-injuries",
+        url=url,
+        category=SourceCategory.INJURY,
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=FakeHttpClient(
+            b"""
+            <html><body><table>
+              <tr>
+                <td class="hauptlink"><a title="Neymar" href="/neymar/profil/spieler/68290">Neymar</a></td>
+                <td><img title="Brazil" alt="Brazil" /></td>
+                <td>Muscle injury</td>
+              </tr>
+              <tr>
+                <td class="hauptlink"><a href="/vinicius-junior/profil/spieler/371998">Vinicius Junior</a></td>
+                <td><img title="Brazil" alt="Brazil" /></td>
+                <td>Suspended</td>
+              </tr>
+              <tr>
+                <td class="hauptlink"><a href="/luka-modric/profil/spieler/27992">Luka Modric</a></td>
+                <td><img title="Croatia" alt="Croatia" /></td>
+                <td>Doubtful</td>
+              </tr>
+            </table></body></html>
+            """
+        ),
+    ).ingest_injuries()
+
+    assert result.status == "ingested"
+    assert result.item_count == 3
+    assert (
+        "injury_availability",
+        "Neymar",
+        "injured",
+    ) in {(fact.fact_type, fact.entity_key, fact.value) for fact in result.facts}
+    assert (
+        "injury_availability",
+        "Vinicius Junior",
+        "suspended",
+    ) in {(fact.fact_type, fact.entity_key, fact.value) for fact in result.facts}
+    assert (
+        "team_unavailable_player_count",
+        "Brazil",
+        2,
+    ) in {(fact.fact_type, fact.entity_key, fact.value) for fact in result.facts}
+    assert (
+        "team_unavailable_player_count",
+        "Croatia",
+        1,
+    ) in {(fact.fact_type, fact.entity_key, fact.value) for fact in result.facts}
+
+
 def test_webpage_adapter_does_not_treat_look_out_copy_as_injury_absence():
     tmp_path = workspace_tmp()
     result = HttpWebpageDataSourceAdapter(
@@ -1497,6 +1553,37 @@ def test_source_ingestion_routes_sportsmole_injury_adapter():
     assert result.status == "ingested"
     assert result.facts[0].fact_type == "team_unavailable_player_count"
     assert result.facts[0].entity_key == "Sweden"
+
+
+def test_source_ingestion_routes_transfermarkt_injury_adapter():
+    tmp_path = workspace_tmp()
+    url = "https://www.transfermarkt.com/world-cup-2026/verletztespieler/pokalwettbewerb/WM26"
+
+    result = ingest_source(
+        SourceDefinition(
+            category=SourceCategory.INJURY,
+            name="transfermarkt-world-cup-2026-injuries",
+            url=url,
+            priority=2,
+            adapter="transfermarkt_injuries",
+        ),
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=FakeHttpClient(
+            b"""
+            <html><body><table>
+              <tr>
+                <td class="hauptlink"><a href="/neymar/profil/spieler/68290">Neymar</a></td>
+                <td><img title="Brazil" /></td>
+                <td>Knee injury</td>
+              </tr>
+            </table></body></html>
+            """
+        ),
+    )
+
+    assert result.status == "ingested"
+    assert result.facts[0].fact_type == "injury_availability"
+    assert result.facts[0].source_name == "transfermarkt-world-cup-2026-injuries"
 
 
 def test_sources_api_lists_configured_source_catalog():

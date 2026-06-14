@@ -98,8 +98,8 @@ World Cup injury index, follows article links, then parses team
 `Out`/`Doubtful`/`Suspended` sections into `injury_availability` and
 `team_unavailable_player_count` facts.
 `config/sources.local.json` also includes Transfermarkt as a secondary injury
-target so availability signals can be checked against Sports Mole, BBC, and
-FIFA news pages.
+target using the dedicated `transfermarkt_injuries` adapter, so availability
+signals can be checked against Sports Mole, BBC, and FIFA news pages.
 
 Run a category validation pass to ingest all matching sources and cross-check facts by source priority:
 
@@ -187,4 +187,8 @@ docker compose up -d --build backend
 When enabled, `/jobs` reports scheduler state and schedules each registered job
 on its configured target interval.
 
-FIFA, Transfermarkt, OddsPortal, OddsChecker, BBC, and Elo pages are configured as crawl targets; their HTML/dynamic parsers should be added as separate adapters instead of being called directly from the prediction button.
+FIFA, Transfermarkt, OddsPortal, OddsChecker, BBC, and Elo pages are configured
+as crawl targets. Dedicated parsers should be added as separate adapters when a
+source needs more than the generic webpage parser; current dedicated adapters
+cover ESPN discovery, Sports Mole injuries, Transfermarkt injuries, and World
+Football Elo.

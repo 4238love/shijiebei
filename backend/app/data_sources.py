@@ -669,6 +669,77 @@ class SportsMoleInjuryDataSourceAdapter:
         return httpx
 
 
+class TransfermarktInjuryDataSourceAdapter:
+    def __init__(
+        self,
+        *,
+        source_name: str,
+        url: str,
+        category: SourceCategory | None = SourceCategory.INJURY,
+        snapshot_dir: Path,
+        http_client=None,
+        timeout_seconds: int = 10,
+    ):
+        self.source_name = source_name
+        self.url = url
+        self.category = category
+        self.snapshot_dir = Path(snapshot_dir)
+        self.http_client = http_client
+        self.timeout_seconds = timeout_seconds
+
+    def ingest_injuries(self) -> SourceIngestionResult:
+        snapshot = self.fetch_snapshot()
+        content = snapshot.path.read_text(encoding="utf-8", errors="ignore")
+        facts = tuple(
+            _transfermarkt_injury_facts_from_html(
+                content,
+                source_name=self.source_name,
+            )
+        )
+        player_fact_count = sum(
+            1 for fact in facts if fact.fact_type == "injury_availability"
+        )
+
+        return SourceIngestionResult(
+            source_name=self.source_name,
+            category=self.category,
+            status=SourceIngestionStatus.INGESTED,
+            item_count=player_fact_count,
+            snapshot=snapshot,
+            facts=facts,
+            message=_webpage_ingestion_message(facts),
+        )
+
+    def fetch_snapshot(self) -> SourceSnapshot:
+        response = _http_get_webpage(
+            self._http_client(),
+            self.url,
+            timeout_seconds=self.timeout_seconds,
+        )
+        response.raise_for_status()
+        content = response.content
+        content_hash = sha256(content).hexdigest()
+        self.snapshot_dir.mkdir(parents=True, exist_ok=True)
+        snapshot_path = (
+            self.snapshot_dir / f"{_safe_name(self.source_name)}-{content_hash[:12]}.html"
+        )
+        snapshot_path.write_bytes(content)
+
+        return SourceSnapshot(
+            source_name=self.source_name,
+            path=snapshot_path,
+            content_hash=content_hash,
+        )
+
+    def _http_client(self):
+        if self.http_client is not None:
+            return self.http_client
+
+        import httpx
+
+        return httpx
+
+
 class WorldFootballEloDataSourceAdapter:
     def __init__(
         self,
@@ -1503,6 +1574,120 @@ def _sportsmole_status_player_names(value_html: str) -> list[str]:
         )
     ]
     return [name for name in names if name]
+
+
+def _transfermarkt_injury_facts_from_html(
+    content: str,
+    *,
+    source_name: str,
+) -> list[NormalizedFact]:
+    player_facts: list[NormalizedFact] = []
+    team_unavailable_counts: dict[str, int] = {}
+    seen_players: set[tuple[str, str]] = set()
+
+    for match in re.finditer(
+        r"<tr\b[^>]*>(.*?)</tr>",
+        content,
+        flags=re.IGNORECASE | re.DOTALL,
+    ):
+        row_html = match.group(1)
+        player_name = _transfermarkt_row_player_name(row_html)
+        if not player_name:
+            continue
+
+        status = _transfermarkt_row_injury_status(row_html)
+        key = (player_name, status)
+        if key in seen_players:
+            continue
+        seen_players.add(key)
+        player_facts.append(
+            NormalizedFact(
+                fact_type="injury_availability",
+                entity_key=player_name,
+                value=status,
+                source_name=source_name,
+            )
+        )
+
+        team_name = _transfermarkt_row_team_name(
+            row_html,
+            player_name=player_name,
+        )
+        if team_name and status in {"injured", "suspended", "doubtful", "out", "unavailable"}:
+            team_unavailable_counts[team_name] = (
+                team_unavailable_counts.get(team_name, 0) + 1
+            )
+
+    team_facts = [
+        NormalizedFact(
+            fact_type="team_unavailable_player_count",
+            entity_key=team_name,
+            value=count,
+            source_name=source_name,
+        )
+        for team_name, count in sorted(team_unavailable_counts.items())
+    ]
+    return [*player_facts, *team_facts]
+
+
+def _transfermarkt_row_player_name(row_html: str) -> str | None:
+    for match in re.finditer(
+        r"<a\b[^>]*href=[\"'][^\"']*/profil/spieler/[^\"']*[\"'][^>]*>(.*?)</a>",
+        row_html,
+        flags=re.IGNORECASE | re.DOTALL,
+    ):
+        player_name = _clean_entity_name(_html_to_text(match.group(1)))
+        if player_name:
+            return player_name
+
+    return None
+
+
+def _transfermarkt_row_team_name(row_html: str, *, player_name: str) -> str | None:
+    for match in re.finditer(
+        r"\b(?:title|alt)=[\"']([^\"']+)[\"']",
+        row_html,
+        flags=re.IGNORECASE,
+    ):
+        candidate = _clean_entity_name(html.unescape(match.group(1)))
+        if candidate.casefold() == player_name.casefold():
+            continue
+        if _looks_like_team_name(candidate):
+            return _title_case_team_name(candidate)
+
+    return None
+
+
+def _transfermarkt_row_injury_status(row_html: str) -> str:
+    row_text = _html_to_text(row_html).lower()
+    if re.search(r"\b(suspended|suspension|ban|banned)\b", row_text):
+        return "suspended"
+    if re.search(r"\b(doubtful|questionable|fitness)\b", row_text):
+        return "doubtful"
+    if re.search(r"\b(ruled out|unavailable)\b", row_text):
+        return "unavailable"
+    if re.search(r"\bout\b", row_text):
+        return "out"
+    return "injured"
+
+
+def _looks_like_team_name(value: str) -> bool:
+    if not value:
+        return False
+    lowered = value.lower()
+    if any(
+        token in lowered
+        for token in (
+            "player",
+            "profile",
+            "injury",
+            "suspended",
+            "market value",
+            "transfermarkt",
+        )
+    ):
+        return False
+    return bool(re.search(r"[A-Za-z]", value))
 
 
 def _title_case_team_name(value: str) -> str:
