@@ -3,6 +3,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.ai_report_api import router as ai_report_router
 from app.backtest_api import router as backtest_router
 from app.health import router as health_router
 from app.methodology_api import router as methodology_router
@@ -49,6 +50,7 @@ def create_app(
     app.include_router(source_router)
     app.include_router(backtest_router)
     app.include_router(weight_router)
+    app.include_router(ai_report_router)
     return app
 
 
