@@ -22,6 +22,11 @@ def build_prediction_dataset_from_validated_facts(
         away_team,
         validated_facts,
     )
+    home_squad_depth_factor, away_squad_depth_factor = _squad_depth_factors(
+        home_team,
+        away_team,
+        validated_facts,
+    )
     return PredictionDataset(
         home_team=home_team,
         away_team=away_team,
@@ -29,11 +34,13 @@ def build_prediction_dataset_from_validated_facts(
             home_team,
             validated_facts,
             market_strength_factor=home_market_factor,
+            squad_depth_factor=home_squad_depth_factor,
         ),
         away=_team_model(
             away_team,
             validated_facts,
             market_strength_factor=away_market_factor,
+            squad_depth_factor=away_squad_depth_factor,
         ),
         home_advantage=home_advantage,
         conflict_count=sum(
@@ -47,6 +54,7 @@ def _team_model(
     facts: list[ValidatedFact],
     *,
     market_strength_factor: float = 1.0,
+    squad_depth_factor: float = 1.0,
 ) -> TeamModel:
     goals_for = _numeric_values(facts, fact_type="team_match_goals_for", entity_key=team_name)
     goals_against = _numeric_values(
@@ -90,6 +98,9 @@ def _team_model(
         )
         attack_index *= attack_penalty
         defense_weakness *= defense_penalty
+    if squad_depth_factor != 1.0:
+        attack_index *= squad_depth_factor
+        defense_weakness *= _clamp(1 / squad_depth_factor, 0.94, 1.06)
     if market_strength_factor != 1.0:
         attack_index *= market_strength_factor
         defense_weakness *= _clamp(1 / market_strength_factor, 0.85, 1.18)
@@ -124,6 +135,40 @@ def _market_strength_factors(
 
 def _market_share_factor(two_way_share: float) -> float:
     return _clamp(1 + (two_way_share - 0.5) * 0.4, 0.88, 1.12)
+
+
+def _squad_depth_factors(
+    home_team: str,
+    away_team: str,
+    facts: list[ValidatedFact],
+) -> tuple[float, float]:
+    home_counts = _numeric_values(
+        facts,
+        fact_type="team_listed_player_count",
+        entity_key=home_team,
+    )
+    away_counts = _numeric_values(
+        facts,
+        fact_type="team_listed_player_count",
+        entity_key=away_team,
+    )
+    if not home_counts or not away_counts:
+        return (1.0, 1.0)
+
+    home_count = mean(home_counts)
+    away_count = mean(away_counts)
+    total = home_count + away_count
+    if total <= 0:
+        return (1.0, 1.0)
+
+    return (
+        _squad_depth_share_factor(home_count / total),
+        _squad_depth_share_factor(away_count / total),
+    )
+
+
+def _squad_depth_share_factor(two_way_share: float) -> float:
+    return _clamp(1 + (two_way_share - 0.5) * 0.18, 0.94, 1.06)
 
 
 def _availability_factors(unavailable_count: float) -> tuple[float, float]:

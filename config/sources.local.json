@@ -104,9 +104,16 @@
       "notes": "ESPN squad page used as first player-level extraction target."
     },
     {
+      "name": "espn-croatia-squad",
+      "url": "https://www.espn.com/soccer/team/squad/_/id/477/croatia",
+      "priority": 2,
+      "adapter": "webpage",
+      "notes": "ESPN squad page used to provide player-level depth for Croatia."
+    },
+    {
       "name": "fifa-world-cup-teams",
       "url": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026/teams",
-      "priority": 2,
+      "priority": 3,
       "adapter": "webpage",
       "notes": "Official team list fallback."
     }

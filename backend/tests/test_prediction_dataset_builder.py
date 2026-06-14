@@ -89,3 +89,17 @@ def test_build_prediction_dataset_penalizes_team_unavailable_players():
 
     assert dataset.home.attack_index < dataset.away.attack_index
     assert dataset.home.defense_weakness > dataset.away.defense_weakness
+
+
+def test_build_prediction_dataset_uses_listed_player_count_as_squad_depth_signal():
+    dataset = build_prediction_dataset_from_validated_facts(
+        home_team="Brazil",
+        away_team="Croatia",
+        validated_facts=[
+            fact("team_listed_player_count", "Brazil", 26),
+            fact("team_listed_player_count", "Croatia", 20),
+        ],
+    )
+
+    assert dataset.home.attack_index > dataset.away.attack_index
+    assert dataset.home.defense_weakness < dataset.away.defense_weakness

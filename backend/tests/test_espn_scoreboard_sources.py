@@ -418,6 +418,23 @@ def test_webpage_adapter_extracts_odds_news_sentiment_and_player_facts():
     assert player_result.facts[0].entity_key == "Neymar"
 
 
+def test_webpage_adapter_extracts_team_listed_player_count_from_squad_text():
+    tmp_path = workspace_tmp()
+    result = HttpWebpageDataSourceAdapter(
+        source_name="fifa-world-cup-teams",
+        url="https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026/teams",
+        category=SourceCategory.PLAYER,
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=FakeHttpClient(
+            b"<html><body>Brazil squad: Neymar, Vinicius Junior, Alisson</body></html>"
+        ),
+    ).ingest_snapshot()
+
+    assert ("team_listed_player_count", "Brazil", 3) in {
+        (fact.fact_type, fact.entity_key, fact.value) for fact in result.facts
+    }
+
+
 def test_webpage_adapter_extracts_espn_squad_player_facts():
     tmp_path = workspace_tmp()
     result = HttpWebpageDataSourceAdapter(
@@ -430,10 +447,32 @@ def test_webpage_adapter_extracts_espn_squad_player_facts():
         ),
     ).ingest_snapshot()
 
-    assert result.item_count == 1
+    assert result.item_count == 2
     assert result.facts[0].fact_type == "player_presence"
     assert result.facts[0].entity_key == "Neymar"
     assert result.facts[0].value == "listed"
+
+
+def test_webpage_adapter_extracts_team_listed_player_count_from_espn_squad_source_name():
+    tmp_path = workspace_tmp()
+    result = HttpWebpageDataSourceAdapter(
+        source_name="espn-brazil-squad",
+        url="https://www.espn.com/soccer/team/squad/_/id/205/brazil",
+        category=SourceCategory.PLAYER,
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=FakeHttpClient(
+            b"""
+            <html><body>
+              <a data-resource-id="AthleteName">Neymar</a>
+              <a data-resource-id="AthleteName">Vinicius Junior</a>
+            </body></html>
+            """
+        ),
+    ).ingest_snapshot()
+
+    assert ("team_listed_player_count", "Brazil", 2) in {
+        (fact.fact_type, fact.entity_key, fact.value) for fact in result.facts
+    }
 
 
 def test_webpage_adapter_retries_without_browser_headers_when_waf_page_is_returned():

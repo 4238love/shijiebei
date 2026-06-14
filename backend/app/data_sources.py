@@ -881,15 +881,28 @@ def _news_sentiment_facts(text: str, *, source_name: str) -> list[NormalizedFact
 def _player_facts(text: str, *, source_name: str) -> list[NormalizedFact]:
     anchor_facts = _espn_player_anchor_facts(text, source_name=source_name)
     if anchor_facts:
-        return anchor_facts
+        team_name = _team_name_from_squad_source_name(source_name)
+        return [
+            *anchor_facts,
+            *_team_listed_player_count_facts(
+                team_name=team_name,
+                player_count=len(anchor_facts),
+                source_name=source_name,
+            ),
+        ]
 
     text = _html_to_text(text)
-    squad_match = re.search(r"\b(?:squad|players?)\s*:\s*([^.;]+)", text, re.IGNORECASE)
+    squad_match = re.search(
+        r"\b(?:(?P<team>[A-Z][A-Za-z' .-]{1,32})\s+)?"
+        r"(?:squad|players?)\s*:\s*(?P<players>[^.;]+)",
+        text,
+        re.IGNORECASE,
+    )
     if not squad_match:
         return []
 
     facts: list[NormalizedFact] = []
-    for raw_name in squad_match.group(1).split(","):
+    for raw_name in squad_match.group("players").split(","):
         player_name = _clean_entity_name(raw_name)
         if not player_name:
             continue
@@ -902,7 +915,46 @@ def _player_facts(text: str, *, source_name: str) -> list[NormalizedFact]:
             )
         )
 
-    return facts
+    team_name = _clean_entity_name(squad_match.group("team") or "")
+    return [
+        *facts,
+        *_team_listed_player_count_facts(
+            team_name=team_name,
+            player_count=len(facts),
+            source_name=source_name,
+        ),
+    ]
+
+
+def _team_listed_player_count_facts(
+    *,
+    team_name: str | None,
+    player_count: int,
+    source_name: str,
+) -> list[NormalizedFact]:
+    if not team_name:
+        return []
+
+    return [
+        NormalizedFact(
+            fact_type="team_listed_player_count",
+            entity_key=team_name,
+            value=player_count,
+            source_name=source_name,
+        )
+    ]
+
+
+def _team_name_from_squad_source_name(source_name: str) -> str | None:
+    parts = _safe_name(source_name).split("-")
+    if not parts or parts[-1] != "squad":
+        return None
+    team_parts = parts[:-1]
+    if team_parts and team_parts[0] in {"espn", "fifa", "bbc"}:
+        team_parts = team_parts[1:]
+    if not team_parts:
+        return None
+    return " ".join(part.capitalize() for part in team_parts)
 
 
 def _espn_player_anchor_facts(content: str, *, source_name: str) -> list[NormalizedFact]:

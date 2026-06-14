@@ -44,6 +44,7 @@ async def methodology():
                 "team form",
                 "market decimal odds",
                 "team availability / unavailable player counts",
+                "squad depth / listed player counts",
                 "cross-source conflict penalties",
             ],
         },

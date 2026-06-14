@@ -101,6 +101,10 @@ Team-scoped injury segments such as `Brazil: Neymar doubtful, Vinicius Junior
 suspended` emit `team_unavailable_player_count` facts. Those facts reduce the
 team's attack index and increase defensive weakness before simulation.
 
+Player squad pages emit `player_presence` plus `team_listed_player_count` facts
+when a team can be inferred from text or source name. When both teams have squad
+counts, the Prediction Dataset applies a small squad-depth adjustment.
+
 Saved prediction records can be reviewed with their source-backed evidence:
 
 - Backend history route: `GET /predictions`
