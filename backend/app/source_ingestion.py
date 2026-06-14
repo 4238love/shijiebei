@@ -22,6 +22,7 @@ def ingest_source(
         result = EspnScoreboardDataSourceAdapter(
             source_name=definition.name,
             url=definition.url,
+            category=definition.category,
             snapshot_dir=snapshot_dir,
             http_client=http_client,
         ).ingest_schedule()

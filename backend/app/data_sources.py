@@ -160,11 +160,13 @@ class EspnScoreboardDataSourceAdapter:
         *,
         source_name: str,
         url: str,
+        category: SourceCategory | None = SourceCategory.SCHEDULE,
         snapshot_dir: Path,
         http_client=None,
         timeout_seconds: int = 10,
     ):
         self.source_name = source_name
+        self.category = category
         self.raw_adapter = HttpJsonDataSourceAdapter(
             source_name=source_name,
             url=url,
@@ -185,11 +187,18 @@ class EspnScoreboardDataSourceAdapter:
 
         return SourceIngestionResult(
             source_name=self.source_name,
-            category=SourceCategory.SCHEDULE,
+            category=self.category,
             status=SourceIngestionStatus.INGESTED,
             item_count=len(matches),
             snapshot=snapshot,
             matches=matches,
+            facts=tuple(
+                _facts_from_espn_matches(
+                    matches,
+                    category=self.category,
+                    source_name=self.source_name,
+                )
+            ),
         )
 
 
@@ -325,6 +334,92 @@ def _schedule_matches_from_espn_scoreboard(
         )
 
     return matches
+
+
+def _facts_from_espn_matches(
+    matches: tuple[ScheduleMatch, ...],
+    *,
+    category: SourceCategory | None,
+    source_name: str,
+) -> list[NormalizedFact]:
+    if category == SourceCategory.TEAM_FORM:
+        return _team_form_facts_from_matches(matches, source_name=source_name)
+
+    return [
+        NormalizedFact(
+            fact_type="fixture_kickoff",
+            entity_key=f"{match.home_team} vs {match.away_team}",
+            value=match.kickoff_at,
+            source_name=source_name,
+        )
+        for match in matches
+        if match.kickoff_at
+    ]
+
+
+def _team_form_facts_from_matches(
+    matches: tuple[ScheduleMatch, ...],
+    *,
+    source_name: str,
+) -> list[NormalizedFact]:
+    facts: list[NormalizedFact] = []
+    for match in matches:
+        if match.home_score is None or match.away_score is None:
+            continue
+        if "final" not in match.status.lower():
+            continue
+
+        facts.extend(
+            [
+                NormalizedFact(
+                    fact_type="team_match_goals_for",
+                    entity_key=match.home_team,
+                    value=match.home_score,
+                    source_name=source_name,
+                ),
+                NormalizedFact(
+                    fact_type="team_match_goals_against",
+                    entity_key=match.home_team,
+                    value=match.away_score,
+                    source_name=source_name,
+                ),
+                NormalizedFact(
+                    fact_type="team_match_result",
+                    entity_key=match.home_team,
+                    value=_match_result(match.home_score, match.away_score),
+                    source_name=source_name,
+                ),
+                NormalizedFact(
+                    fact_type="team_match_goals_for",
+                    entity_key=match.away_team,
+                    value=match.away_score,
+                    source_name=source_name,
+                ),
+                NormalizedFact(
+                    fact_type="team_match_goals_against",
+                    entity_key=match.away_team,
+                    value=match.home_score,
+                    source_name=source_name,
+                ),
+                NormalizedFact(
+                    fact_type="team_match_result",
+                    entity_key=match.away_team,
+                    value=_match_result(match.away_score, match.home_score),
+                    source_name=source_name,
+                ),
+            ]
+        )
+
+    return facts
+
+
+def _match_result(goals_for: int, goals_against: int) -> str:
+    if goals_for > goals_against:
+        return "win"
+    if goals_for == goals_against:
+        return "draw"
+
+    return "loss"
 
 
 def _event_competitors(event: dict) -> list[dict]:

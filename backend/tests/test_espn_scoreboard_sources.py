@@ -80,6 +80,37 @@ def espn_scoreboard_payload() -> bytes:
     ).encode()
 
 
+def espn_completed_scoreboard_payload() -> bytes:
+    return json.dumps(
+        {
+            "events": [
+                {
+                    "id": "401752999",
+                    "date": "2026-06-20T19:00Z",
+                    "name": "Brazil vs Croatia",
+                    "status": {"type": {"description": "Final"}},
+                    "competitions": [
+                        {
+                            "competitors": [
+                                {
+                                    "homeAway": "home",
+                                    "team": {"displayName": "Brazil"},
+                                    "score": "2",
+                                },
+                                {
+                                    "homeAway": "away",
+                                    "team": {"displayName": "Croatia"},
+                                    "score": "1",
+                                },
+                            ]
+                        }
+                    ],
+                }
+            ]
+        }
+    ).encode()
+
+
 def write_sources_config(path: Path):
     path.write_text(
         json.dumps(
@@ -232,6 +263,37 @@ def test_espn_scoreboard_adapter_saves_snapshot_and_parses_schedule_matches():
     assert result.matches[0].home_team == "Mexico"
     assert result.matches[0].away_team == "Canada"
     assert result.matches[0].kickoff_at == "2026-06-11T19:00Z"
+    assert result.facts[0].fact_type == "fixture_kickoff"
+    assert result.facts[0].entity_key == "Mexico vs Canada"
+
+
+def test_espn_scoreboard_adapter_extracts_team_form_facts_for_completed_matches():
+    tmp_path = workspace_tmp()
+    adapter = EspnScoreboardDataSourceAdapter(
+        source_name="espn-world-cup-scoreboard-form",
+        url="https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard",
+        category=SourceCategory.TEAM_FORM,
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=FakeHttpClient(espn_completed_scoreboard_payload()),
+    )
+
+    result = adapter.ingest_schedule()
+
+    assert result.category == SourceCategory.TEAM_FORM
+    assert result.item_count == 1
+    assert {fact.fact_type for fact in result.facts} == {
+        "team_match_goals_for",
+        "team_match_goals_against",
+        "team_match_result",
+    }
+    assert ("team_match_goals_for", "Brazil") in {
+        (fact.fact_type, fact.entity_key) for fact in result.facts
+    }
+    assert next(
+        fact
+        for fact in result.facts
+        if fact.fact_type == "team_match_result" and fact.entity_key == "Brazil"
+    ).value == "win"
 
 
 def test_webpage_adapter_saves_html_snapshot_and_extracts_injury_facts():
