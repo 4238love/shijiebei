@@ -476,7 +476,12 @@ def _http_get_webpage(http_client, url: str, *, timeout_seconds: int):
         ),
     }
     try:
-        return http_client.get(url, timeout=timeout_seconds, headers=headers)
+        return http_client.get(
+            url,
+            timeout=timeout_seconds,
+            headers=headers,
+            follow_redirects=True,
+        )
     except TypeError:
         return http_client.get(url, timeout=timeout_seconds)
 
@@ -491,7 +496,7 @@ def _facts_from_webpage(
     if category == SourceCategory.INJURY:
         return _injury_facts(text, source_name=source_name)
     if category == SourceCategory.ODDS:
-        return _odds_facts(text, source_name=source_name)
+        return _odds_facts(content, source_name=source_name)
     if category == SourceCategory.NEWS_SENTIMENT:
         return _news_sentiment_facts(text, source_name=source_name)
     if category == SourceCategory.PLAYER:
@@ -595,7 +600,28 @@ def _odds_facts(text: str, *, source_name: str) -> list[NormalizedFact]:
             )
         )
 
-    return facts
+    if facts:
+        return facts
+
+    market_prices: list[NormalizedFact] = []
+    seen_prices: set[float] = set()
+    for index, match in enumerate(re.finditer(r"\b([1-9]\d?\.\d{2})\b", text), start=1):
+        price = float(match.group(1))
+        if price in seen_prices:
+            continue
+        seen_prices.add(price)
+        market_prices.append(
+            NormalizedFact(
+                fact_type="market_decimal_odds",
+                entity_key=f"market_price_{len(market_prices) + 1}",
+                value=price,
+                source_name=source_name,
+            )
+        )
+        if len(market_prices) >= 20:
+            break
+
+    return market_prices
 
 
 def _news_sentiment_facts(text: str, *, source_name: str) -> list[NormalizedFact]:

@@ -43,6 +43,13 @@ class UrlMappedHttpClient:
         return FakeResponse(self.content_by_url[url])
 
 
+class RedirectRequiredHttpClient:
+    def get(self, url, timeout, headers=None, follow_redirects=False):
+        if not follow_redirects:
+            raise RuntimeError("redirects disabled")
+        return FakeResponse(b"<html><body>Brazil 1.85 Draw 3.40 Croatia 4.20</body></html>")
+
+
 def workspace_tmp() -> Path:
     path = Path(".test-output") / uuid4().hex
     path.mkdir(parents=True, exist_ok=True)
@@ -352,6 +359,54 @@ def test_webpage_adapter_extracts_odds_news_sentiment_and_player_facts():
     assert news_result.facts[0].value == "negative"
     assert player_result.facts[0].fact_type == "player_presence"
     assert player_result.facts[0].entity_key == "Neymar"
+
+
+def test_webpage_adapter_follows_redirects_for_market_pages():
+    tmp_path = workspace_tmp()
+    result = HttpWebpageDataSourceAdapter(
+        source_name="oddsportal-world-cup",
+        url="https://www.oddsportal.com/football/world/world-cup/",
+        category=SourceCategory.ODDS,
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=RedirectRequiredHttpClient(),
+    ).ingest_snapshot()
+
+    assert result.status == "ingested"
+    assert result.facts[0].fact_type == "decimal_odds"
+
+
+def test_webpage_adapter_extracts_market_price_fallback_when_team_names_are_missing():
+    tmp_path = workspace_tmp()
+    result = HttpWebpageDataSourceAdapter(
+        source_name="betexplorer-world-cup",
+        url="https://www.betexplorer.com/football/world/world-cup/",
+        category=SourceCategory.ODDS,
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=FakeHttpClient(
+            b"<html><body><span>1.68</span><span>3.75</span><span>5.21</span></body></html>"
+        ),
+    ).ingest_snapshot()
+
+    assert result.item_count == 3
+    assert result.facts[0].fact_type == "market_decimal_odds"
+    assert result.facts[0].entity_key == "market_price_1"
+    assert result.facts[0].value == 1.68
+
+
+def test_webpage_adapter_extracts_market_prices_from_embedded_script_data():
+    tmp_path = workspace_tmp()
+    result = HttpWebpageDataSourceAdapter(
+        source_name="betexplorer-world-cup",
+        url="https://www.betexplorer.com/football/world/world-cup/",
+        category=SourceCategory.ODDS,
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=FakeHttpClient(
+            b"<html><script>window.odds=[1.68,3.75,5.21]</script><body>No static odds</body></html>"
+        ),
+    ).ingest_snapshot()
+
+    assert result.item_count == 3
+    assert [fact.value for fact in result.facts] == [1.68, 3.75, 5.21]
 
 
 def test_webpage_adapter_extracts_ranking_facts():

@@ -66,17 +66,17 @@
   "odds": [
     {
       "name": "oddsportal-world-cup",
-      "url": "https://www.oddsportal.com/football/world/world-cup/",
+      "url": "https://www.oddsportal.com/football/world/world-championship-2026/",
       "priority": 1,
       "adapter": "webpage",
       "notes": "Market odds comparison source; dynamic rendering likely."
     },
     {
-      "name": "oddschecker-world-cup",
-      "url": "https://www.oddschecker.com/football/world-cup",
+      "name": "betexplorer-world-cup",
+      "url": "https://www.betexplorer.com/football/world/world-cup/",
       "priority": 2,
       "adapter": "webpage",
-      "notes": "Secondary market comparison source."
+      "notes": "Secondary market comparison source with static decimal odds fragments."
     }
   ],
   "news_sentiment": [
