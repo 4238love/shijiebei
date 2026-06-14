@@ -12,6 +12,7 @@ from app.data_sources import (
     FifaRankingDataSourceAdapter,
     HttpWebpageDataSourceAdapter,
     OddsCheckerOddsDataSourceAdapter,
+    SchemaOrgScheduleDataSourceAdapter,
     SportsMoleInjuryDataSourceAdapter,
     SourceCategory,
     TransfermarktInjuryDataSourceAdapter,
@@ -677,6 +678,36 @@ def test_webpage_schedule_adapter_extracts_schema_org_sports_events():
     ] == [
         ("fixture_kickoff", "Haiti vs Scotland", "2026-06-14T03:00:00+02:00"),
         ("fixture_kickoff", "Brazil vs Morocco", "2026-06-14T00:00:00+02:00"),
+    ]
+
+
+def test_schema_org_schedule_adapter_extracts_sports_event_fixtures():
+    tmp_path = workspace_tmp()
+    result = SchemaOrgScheduleDataSourceAdapter(
+        source_name="fifa-2026-fixtures",
+        url="https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026/scores-fixtures",
+        category=SourceCategory.SCHEDULE,
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=FakeHttpClient(
+            b"""
+            <html><script type="application/ld+json">
+            {"@graph":[
+              {"@type":"SportsEvent","sport":"Soccer","name":"Mexico vs Canada","startDate":"2026-06-11T20:00:00-05:00"},
+              {"@type":["Event","SportsEvent"],"sport":"Football","name":"USA - Japan","startDate":"2026-06-12T18:00:00-04:00"}
+            ]}
+            </script></html>
+            """
+        ),
+    ).ingest_schedule()
+
+    assert result.status == "ingested"
+    assert result.snapshot is not None
+    assert result.item_count == 2
+    assert [
+        (fact.fact_type, fact.entity_key, fact.value) for fact in result.facts
+    ] == [
+        ("fixture_kickoff", "Mexico vs Canada", "2026-06-11T20:00:00-05:00"),
+        ("fixture_kickoff", "USA vs Japan", "2026-06-12T18:00:00-04:00"),
     ]
 
 
@@ -1640,6 +1671,31 @@ def test_source_ingestion_routes_fifa_ranking_adapter():
 
     assert result.status == "ingested"
     assert result.facts[0].entity_key == "Argentina"
+
+
+def test_source_ingestion_routes_schema_org_schedule_adapter():
+    tmp_path = workspace_tmp()
+
+    result = ingest_source(
+        SourceDefinition(
+            category=SourceCategory.SCHEDULE,
+            name="fifa-2026-fixtures",
+            url="https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026/scores-fixtures",
+            priority=2,
+            adapter="schema_org_schedule",
+        ),
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=FakeHttpClient(
+            b"""
+            <html><script type="application/ld+json">
+            {"@type":"SportsEvent","sport":"Football","name":"Brazil - Morocco","startDate":"2026-06-14T00:00:00+02:00"}
+            </script></html>
+            """
+        ),
+    )
+
+    assert result.status == "ingested"
+    assert result.facts[0].entity_key == "Brazil vs Morocco"
 
 
 def test_source_ingestion_routes_espn_team_schedule_discovery_adapter():

@@ -91,3 +91,16 @@ def test_local_source_config_uses_dedicated_fifa_ranking_adapter():
 
     assert len(fifa_ranking_sources) == 1
     assert fifa_ranking_sources[0].adapter == "fifa_ranking"
+
+
+def test_local_source_config_uses_dedicated_schema_org_schedule_adapter():
+    config = load_source_catalog_config(Path("config/sources.local.json"))
+
+    schedule_sources = [
+        source
+        for source in config.sources
+        if source.name in {"fifa-2026-fixtures", "oddsportal-world-cup-schedule"}
+    ]
+
+    assert len(schedule_sources) == 2
+    assert {source.adapter for source in schedule_sources} == {"schema_org_schedule"}

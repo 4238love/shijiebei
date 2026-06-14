@@ -91,10 +91,11 @@ manually listing one URL per team.
 ESPN discovery adapters reuse a fresh JSON snapshot for 15 minutes so repeated
 validation/prediction runs do not re-fetch every team endpoint.
 
-Schedule webpage sources can parse Schema.org `SportsEvent` JSON-LD blocks into
-`fixture_kickoff` facts. `config/sources.local.json` uses this for an
-OddsPortal schedule fallback so ESPN schedule facts can be cross-checked against
-a second website when static event metadata is available.
+Schedule sources can use the dedicated `schema_org_schedule` adapter to parse
+Schema.org `SportsEvent` JSON-LD blocks into `fixture_kickoff` facts.
+`config/sources.local.json` uses this for FIFA and OddsPortal schedule
+fallbacks so ESPN schedule facts can be cross-checked against additional
+websites when static event metadata is available.
 
 Sports Mole injury sources use a dedicated crawler: the adapter snapshots the
 World Cup injury index, follows article links, then parses team
@@ -196,6 +197,6 @@ on its configured target interval.
 FIFA, Transfermarkt, OddsPortal, OddsChecker, BBC, and Elo pages are configured
 as crawl targets. Dedicated parsers should be added as separate adapters when a
 source needs more than the generic webpage parser; current dedicated adapters
-cover ESPN discovery, FIFA ranking, Sports Mole injuries, Transfermarkt
-injuries, and World Football Elo, plus BetExplorer/OddsChecker match-card odds
-and Transfermarkt squad rows.
+cover ESPN discovery, Schema.org schedules, FIFA ranking, Sports Mole injuries,
+Transfermarkt injuries, and World Football Elo, plus BetExplorer/OddsChecker
+match-card odds and Transfermarkt squad rows.

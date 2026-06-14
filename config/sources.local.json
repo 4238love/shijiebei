@@ -11,14 +11,14 @@
       "name": "fifa-2026-fixtures",
       "url": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026/scores-fixtures",
       "priority": 2,
-      "adapter": "webpage",
-      "notes": "Official tournament fixtures page; use as authoritative schedule fallback."
+      "adapter": "schema_org_schedule",
+      "notes": "Official tournament fixtures page; parse Schema.org SportsEvent metadata as authoritative schedule fallback."
     },
     {
       "name": "oddsportal-world-cup-schedule",
       "url": "https://www.oddsportal.com/football/world/world-championship-2026/",
       "priority": 3,
-      "adapter": "webpage",
+      "adapter": "schema_org_schedule",
       "notes": "Schema.org SportsEvent fallback for schedule cross-checking."
     }
   ],

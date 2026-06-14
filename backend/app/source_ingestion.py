@@ -11,6 +11,7 @@ from app.data_sources import (
     FifaRankingDataSourceAdapter,
     HttpWebpageDataSourceAdapter,
     OddsCheckerOddsDataSourceAdapter,
+    SchemaOrgScheduleDataSourceAdapter,
     SportsMoleInjuryDataSourceAdapter,
     SourceIngestionResult,
     SourceIngestionStatus,
@@ -75,6 +76,16 @@ def ingest_source(
             snapshot_dir=snapshot_dir,
             http_client=http_client,
         ).ingest_rankings()
+        return replace(result, category=definition.category)
+
+    if definition.adapter == "schema_org_schedule":
+        result = SchemaOrgScheduleDataSourceAdapter(
+            source_name=definition.name,
+            url=definition.url,
+            category=definition.category,
+            snapshot_dir=snapshot_dir,
+            http_client=http_client,
+        ).ingest_schedule()
         return replace(result, category=definition.category)
 
     if definition.adapter == "sportsmole_injuries":
