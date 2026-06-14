@@ -45,3 +45,14 @@ def test_local_source_config_uses_dedicated_transfermarkt_injury_adapter():
 
     assert len(transfermarkt_injury_sources) == 1
     assert transfermarkt_injury_sources[0].adapter == "transfermarkt_injuries"
+
+
+def test_local_source_config_uses_dedicated_oddschecker_odds_adapter():
+    config = load_source_catalog_config(Path("config/sources.local.json"))
+
+    oddschecker_sources = [
+        source for source in config.sources if source.name == "oddschecker-world-cup"
+    ]
+
+    assert len(oddschecker_sources) == 1
+    assert oddschecker_sources[0].adapter == "oddschecker_odds"

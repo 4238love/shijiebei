@@ -9,6 +9,7 @@ from app.data_sources import (
     EspnTeamRosterDiscoveryDataSourceAdapter,
     EspnTeamScheduleDiscoveryDataSourceAdapter,
     HttpWebpageDataSourceAdapter,
+    OddsCheckerOddsDataSourceAdapter,
     SportsMoleInjuryDataSourceAdapter,
     SourceCategory,
     TransfermarktInjuryDataSourceAdapter,
@@ -1245,6 +1246,66 @@ def test_webpage_adapter_extracts_betexplorer_match_row_one_x_two_odds():
     ]
 
 
+def test_oddschecker_adapter_extracts_match_card_one_x_two_odds():
+    tmp_path = workspace_tmp()
+    result = OddsCheckerOddsDataSourceAdapter(
+        source_name="oddschecker-world-cup",
+        url="https://www.oddschecker.com/football/world-cup",
+        category=SourceCategory.ODDS,
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=FakeHttpClient(
+            b"""
+            <html><body>
+              <article data-testid="event-card" data-home-team="Brazil" data-away-team="Morocco">
+                <button data-outcome-name="Brazil" data-odds="1.72"></button>
+                <button data-outcome-name="Draw" data-odds="3.90"></button>
+                <button data-outcome-name="Morocco" data-odds="5.80"></button>
+              </article>
+            </body></html>
+            """
+        ),
+    ).ingest_odds()
+
+    assert result.status == "ingested"
+    assert result.item_count == 3
+    assert [
+        (fact.fact_type, fact.entity_key, fact.value) for fact in result.facts
+    ] == [
+        ("decimal_odds", "Brazil", 1.72),
+        ("match_draw_decimal_odds", "Brazil vs Morocco", 3.90),
+        ("decimal_odds", "Morocco", 5.80),
+    ]
+
+
+def test_oddschecker_adapter_handles_fractional_prices_and_attribute_order():
+    tmp_path = workspace_tmp()
+    result = OddsCheckerOddsDataSourceAdapter(
+        source_name="oddschecker-world-cup",
+        url="https://www.oddschecker.com/football/world-cup",
+        category=SourceCategory.ODDS,
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=FakeHttpClient(
+            b"""
+            <html><body>
+              <article data-testid="event-card" data-home-team="Brazil" data-away-team="Morocco">
+                <button data-odds="4/5" data-outcome-name="Brazil"></button>
+                <button data-odds="3/1" data-outcome-name="Draw"></button>
+                <button data-odds="9/2" data-outcome-name="Morocco"></button>
+              </article>
+            </body></html>
+            """
+        ),
+    ).ingest_odds()
+
+    assert [
+        (fact.fact_type, fact.entity_key, fact.value) for fact in result.facts
+    ] == [
+        ("decimal_odds", "Brazil", 1.8),
+        ("match_draw_decimal_odds", "Brazil vs Morocco", 4.0),
+        ("decimal_odds", "Morocco", 5.5),
+    ]
+
+
 def test_webpage_adapter_limits_betexplorer_rows_to_world_championship_section():
     tmp_path = workspace_tmp()
     result = HttpWebpageDataSourceAdapter(
@@ -1584,6 +1645,37 @@ def test_source_ingestion_routes_transfermarkt_injury_adapter():
     assert result.status == "ingested"
     assert result.facts[0].fact_type == "injury_availability"
     assert result.facts[0].source_name == "transfermarkt-world-cup-2026-injuries"
+
+
+def test_source_ingestion_routes_oddschecker_odds_adapter():
+    tmp_path = workspace_tmp()
+    url = "https://www.oddschecker.com/football/world-cup"
+
+    result = ingest_source(
+        SourceDefinition(
+            category=SourceCategory.ODDS,
+            name="oddschecker-world-cup",
+            url=url,
+            priority=3,
+            adapter="oddschecker_odds",
+        ),
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=FakeHttpClient(
+            b"""
+            <html><body>
+              <article data-testid="event-card" data-home-team="Brazil" data-away-team="Morocco">
+                <button data-outcome-name="Brazil" data-odds="1.72"></button>
+                <button data-outcome-name="Draw" data-odds="3.90"></button>
+                <button data-outcome-name="Morocco" data-odds="5.80"></button>
+              </article>
+            </body></html>
+            """
+        ),
+    )
+
+    assert result.status == "ingested"
+    assert result.facts[0].fact_type == "decimal_odds"
+    assert result.facts[0].source_name == "oddschecker-world-cup"
 
 
 def test_sources_api_lists_configured_source_catalog():

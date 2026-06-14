@@ -110,7 +110,7 @@
       "name": "oddschecker-world-cup",
       "url": "https://www.oddschecker.com/football/world-cup",
       "priority": 3,
-      "adapter": "webpage",
+      "adapter": "oddschecker_odds",
       "notes": "Additional odds comparison website for cross-checking market price samples."
     }
   ],

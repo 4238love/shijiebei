@@ -740,6 +740,75 @@ class TransfermarktInjuryDataSourceAdapter:
         return httpx
 
 
+class OddsCheckerOddsDataSourceAdapter:
+    def __init__(
+        self,
+        *,
+        source_name: str,
+        url: str,
+        category: SourceCategory | None = SourceCategory.ODDS,
+        snapshot_dir: Path,
+        http_client=None,
+        timeout_seconds: int = 10,
+    ):
+        self.source_name = source_name
+        self.url = url
+        self.category = category
+        self.snapshot_dir = Path(snapshot_dir)
+        self.http_client = http_client
+        self.timeout_seconds = timeout_seconds
+
+    def ingest_odds(self) -> SourceIngestionResult:
+        snapshot = self.fetch_snapshot()
+        content = snapshot.path.read_text(encoding="utf-8", errors="ignore")
+        facts = tuple(
+            _oddschecker_odds_facts_from_html(
+                content,
+                source_name=self.source_name,
+            )
+            or _odds_facts(content, source_name=self.source_name)
+        )
+
+        return SourceIngestionResult(
+            source_name=self.source_name,
+            category=self.category,
+            status=SourceIngestionStatus.INGESTED,
+            item_count=len(facts),
+            snapshot=snapshot,
+            facts=facts,
+            message=_webpage_ingestion_message(facts),
+        )
+
+    def fetch_snapshot(self) -> SourceSnapshot:
+        response = _http_get_webpage(
+            self._http_client(),
+            self.url,
+            timeout_seconds=self.timeout_seconds,
+        )
+        response.raise_for_status()
+        content = response.content
+        content_hash = sha256(content).hexdigest()
+        self.snapshot_dir.mkdir(parents=True, exist_ok=True)
+        snapshot_path = (
+            self.snapshot_dir / f"{_safe_name(self.source_name)}-{content_hash[:12]}.html"
+        )
+        snapshot_path.write_bytes(content)
+
+        return SourceSnapshot(
+            source_name=self.source_name,
+            path=snapshot_path,
+            content_hash=content_hash,
+        )
+
+    def _http_client(self):
+        if self.http_client is not None:
+            return self.http_client
+
+        import httpx
+
+        return httpx
+
+
 class WorldFootballEloDataSourceAdapter:
     def __init__(
         self,
@@ -1803,6 +1872,143 @@ def _odds_facts(text: str, *, source_name: str) -> list[NormalizedFact]:
             break
 
     return market_prices
+
+
+def _oddschecker_odds_facts_from_html(
+    content: str,
+    *,
+    source_name: str,
+) -> list[NormalizedFact]:
+    facts: list[NormalizedFact] = []
+    seen_matches: set[str] = set()
+
+    for section in _oddschecker_event_sections(content):
+        home_team = _attribute_value(section, "data-home-team")
+        away_team = _attribute_value(section, "data-away-team")
+        if not home_team or not away_team:
+            home_team = _oddschecker_team_label(section, "home")
+            away_team = _oddschecker_team_label(section, "away")
+        if not home_team or not away_team:
+            continue
+
+        home_team = _clean_entity_name(home_team)
+        away_team = _clean_entity_name(away_team)
+        match_key = f"{home_team} vs {away_team}"
+        if match_key in seen_matches:
+            continue
+
+        outcome_prices = _oddschecker_outcome_prices(section)
+        home_price = outcome_prices.get(home_team.casefold())
+        draw_price = outcome_prices.get("draw")
+        away_price = outcome_prices.get(away_team.casefold())
+        if home_price is None or draw_price is None or away_price is None:
+            continue
+
+        seen_matches.add(match_key)
+        facts.extend(
+            [
+                NormalizedFact(
+                    fact_type="decimal_odds",
+                    entity_key=home_team,
+                    value=home_price,
+                    source_name=source_name,
+                ),
+                NormalizedFact(
+                    fact_type="match_draw_decimal_odds",
+                    entity_key=match_key,
+                    value=draw_price,
+                    source_name=source_name,
+                ),
+                NormalizedFact(
+                    fact_type="decimal_odds",
+                    entity_key=away_team,
+                    value=away_price,
+                    source_name=source_name,
+                ),
+            ]
+        )
+
+    return facts
+
+
+def _oddschecker_event_sections(content: str) -> list[str]:
+    sections: list[str] = []
+    for match in re.finditer(
+        r"<(article|div|li)\b[^>]*(?:event-card|event|match|fixture)[^>]*>.*?</\1>",
+        content,
+        flags=re.IGNORECASE | re.DOTALL,
+    ):
+        section = match.group(0)
+        if "data-odds" in section or "data-outcome" in section:
+            sections.append(section)
+
+    if not sections and "data-home-team" in content and "data-away-team" in content:
+        return [content]
+    return sections
+
+
+def _oddschecker_team_label(section: str, side: str) -> str | None:
+    patterns = [
+        rf"\bdata-{side}-team=[\"']([^\"']+)[\"']",
+        rf"\bdata-testid=[\"']{side}-team[\"'][^>]*>(.*?)<",
+        rf"\bclass=[\"'][^\"']*{side}-team[^\"']*[\"'][^>]*>(.*?)<",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, section, flags=re.IGNORECASE | re.DOTALL)
+        if match:
+            value = _html_to_text(match.group(1))
+            if value:
+                return value
+    return None
+
+
+def _attribute_value(content: str, attribute_name: str) -> str | None:
+    match = re.search(
+        rf"\b{re.escape(attribute_name)}=[\"']([^\"']+)[\"']",
+        content,
+        flags=re.IGNORECASE,
+    )
+    if not match:
+        return None
+    return html.unescape(match.group(1))
+
+
+def _oddschecker_outcome_prices(section: str) -> dict[str, float]:
+    prices: dict[str, float] = {}
+    for match in re.finditer(r"<[^>]+>", section, flags=re.IGNORECASE | re.DOTALL):
+        tag = match.group(0)
+        outcome_name = (
+            _attribute_value(tag, "data-outcome-name")
+            or _attribute_value(tag, "data-bet-name")
+            or _attribute_value(tag, "data-selection-name")
+        )
+        odds_value = _attribute_value(tag, "data-odds")
+        if outcome_name is None or odds_value is None:
+            continue
+
+        outcome_name = _clean_entity_name(outcome_name)
+        price = _oddschecker_decimal_price(odds_value)
+        if not outcome_name or price is None:
+            continue
+        prices[outcome_name.casefold()] = price
+
+    return prices
+
+
+def _oddschecker_decimal_price(value: str) -> float | None:
+    cleaned = html.unescape(value).strip()
+    decimal_price = _optional_float(cleaned)
+    if decimal_price is not None:
+        return decimal_price
+
+    fraction = re.match(r"^(\d+)\s*/\s*(\d+)$", cleaned)
+    if not fraction:
+        return None
+    numerator = int(fraction.group(1))
+    denominator = int(fraction.group(2))
+    if denominator == 0:
+        return None
+    return round(1 + numerator / denominator, 4)
 
 
 def _betexplorer_match_row_odds_facts(

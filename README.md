@@ -138,8 +138,9 @@ raise attack index, and reduce defensive weakness before Monte Carlo simulation.
 BetExplorer-style static match rows with `data-odd` 1X2 prices are parsed into
 home/draw/away facts, so captured marketplace HTML can produce team-scoped odds
 instead of only loose market price samples.
-OddsChecker is configured as an additional odds comparison crawl target for
-market-price cross-checking.
+OddsChecker is configured as an additional odds comparison crawl target using
+the dedicated `oddschecker_odds` adapter, including decimal and fractional
+price parsing for 1X2 match cards.
 
 Team-scoped injury segments such as `Brazil: Neymar doubtful, Vinicius Junior
 suspended` emit `team_unavailable_player_count` facts. Those facts reduce the
@@ -191,4 +192,4 @@ FIFA, Transfermarkt, OddsPortal, OddsChecker, BBC, and Elo pages are configured
 as crawl targets. Dedicated parsers should be added as separate adapters when a
 source needs more than the generic webpage parser; current dedicated adapters
 cover ESPN discovery, Sports Mole injuries, Transfermarkt injuries, and World
-Football Elo.
+Football Elo, plus OddsChecker match-card odds.

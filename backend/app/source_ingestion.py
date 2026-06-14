@@ -8,6 +8,7 @@ from app.data_sources import (
     EspnTeamRosterDiscoveryDataSourceAdapter,
     EspnTeamScheduleDiscoveryDataSourceAdapter,
     HttpWebpageDataSourceAdapter,
+    OddsCheckerOddsDataSourceAdapter,
     SportsMoleInjuryDataSourceAdapter,
     SourceIngestionResult,
     SourceIngestionStatus,
@@ -81,6 +82,16 @@ def ingest_source(
             snapshot_dir=snapshot_dir,
             http_client=http_client,
         ).ingest_injuries()
+        return replace(result, category=definition.category)
+
+    if definition.adapter == "oddschecker_odds":
+        result = OddsCheckerOddsDataSourceAdapter(
+            source_name=definition.name,
+            url=definition.url,
+            category=definition.category,
+            snapshot_dir=snapshot_dir,
+            http_client=http_client,
+        ).ingest_odds()
         return replace(result, category=definition.category)
 
     if definition.adapter == "world_football_elo":

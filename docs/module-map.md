@@ -38,7 +38,7 @@ This map summarizes the current implementation using the project glossary.
 - `backend/app/data_sources.py`
   - Owns `FixtureDataSourceAdapter`, `HttpJsonDataSourceAdapter`, `SourceSnapshot`, and `SourceCatalog`.
   - Converts fixture or HTTP JSON source material into a Prediction Dataset.
-  - Includes dedicated live-source adapters for ESPN scoreboards/discovery, Sports Mole injuries, Transfermarkt injuries, and World Football Elo rankings.
+  - Includes dedicated live-source adapters for ESPN scoreboards/discovery, Sports Mole injuries, Transfermarkt injuries, OddsChecker odds, and World Football Elo rankings.
   - `config/sources.example.json` records first-wave source categories and placeholder URLs.
 
 - `backend/app/source_snapshot_repository.py`
