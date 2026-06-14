@@ -60,6 +60,7 @@ The frontend Sources page includes an operations console for running snapshot-ba
 
 Webpage sources now return category-aware normalized facts when the static HTML contains extractable signals:
 
+- `fixture_kickoff`
 - `injury_availability`
 - `team_unavailable_player_count`
 - `decimal_odds`
@@ -71,6 +72,11 @@ Webpage sources now return category-aware normalized facts when the static HTML 
 World Football Elo uses a dedicated adapter that snapshots `World.tsv` plus
 `en.teams.tsv`, maps country codes to team names, and emits `team_rating` /
 `team_ranking_position` facts.
+
+Schedule webpage sources can parse Schema.org `SportsEvent` JSON-LD blocks into
+`fixture_kickoff` facts. `config/sources.local.json` uses this for an
+OddsPortal schedule fallback so ESPN schedule facts can be cross-checked against
+a second website when static event metadata is available.
 
 Run a category validation pass to ingest all matching sources and cross-check facts by source priority:
 

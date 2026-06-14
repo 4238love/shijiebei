@@ -650,6 +650,11 @@ def _facts_from_webpage(
     source_name: str,
 ) -> list[NormalizedFact]:
     text = _html_to_text(content)
+    if category == SourceCategory.SCHEDULE:
+        return _schema_org_sports_event_schedule_facts(
+            content,
+            source_name=source_name,
+        )
     if category == SourceCategory.INJURY:
         return _injury_facts(text, source_name=source_name)
     if category == SourceCategory.ODDS:
@@ -673,6 +678,103 @@ def _facts_from_webpage(
         ]
 
     return []
+
+
+def _schema_org_sports_event_schedule_facts(
+    content: str,
+    *,
+    source_name: str,
+) -> list[NormalizedFact]:
+    facts: list[NormalizedFact] = []
+    seen_matches: set[str] = set()
+    for item in _schema_org_json_ld_items(content):
+        if not _schema_org_item_has_type(item, "SportsEvent"):
+            continue
+        if str(item.get("sport", "")).lower() not in {"", "football", "soccer"}:
+            continue
+
+        home_team, away_team = _match_teams_from_event_name(str(item.get("name", "")))
+        kickoff_at = item.get("startDate")
+        match_key = f"{home_team} vs {away_team}"
+        if (
+            not home_team
+            or not away_team
+            or not kickoff_at
+            or match_key in seen_matches
+        ):
+            continue
+
+        seen_matches.add(match_key)
+        facts.append(
+            NormalizedFact(
+                fact_type="fixture_kickoff",
+                entity_key=match_key,
+                value=kickoff_at,
+                source_name=source_name,
+            )
+        )
+
+    return facts
+
+
+def _schema_org_json_ld_items(content: str) -> list[dict]:
+    items: list[dict] = []
+    pattern = re.compile(
+        r"<script\b[^>]*type=[\"']application/ld\+json[\"'][^>]*>(.*?)</script>",
+        re.IGNORECASE | re.DOTALL,
+    )
+    for match in pattern.finditer(content):
+        raw_json = html.unescape(match.group(1)).strip()
+        if not raw_json:
+            continue
+        try:
+            payload = json.loads(raw_json)
+        except json.JSONDecodeError:
+            continue
+        items.extend(_flatten_schema_org_json_ld(payload))
+
+    return items
+
+
+def _flatten_schema_org_json_ld(payload) -> list[dict]:
+    if isinstance(payload, dict):
+        graph = payload.get("@graph")
+        if isinstance(graph, list):
+            return [
+                item
+                for item in graph
+                if isinstance(item, dict)
+            ]
+        return [payload]
+    if isinstance(payload, list):
+        return [
+            item
+            for item in payload
+            if isinstance(item, dict)
+        ]
+    return []
+
+
+def _schema_org_item_has_type(item: dict, type_name: str) -> bool:
+    raw_type = item.get("@type")
+    if isinstance(raw_type, list):
+        return type_name in {str(value) for value in raw_type}
+    return str(raw_type) == type_name
+
+
+def _match_teams_from_event_name(event_name: str) -> tuple[str | None, str | None]:
+    match = re.match(
+        r"\s*([A-Z][A-Za-z' .-]{1,50}?)\s+(?:v|vs\.?|[-–—])\s+([A-Z][A-Za-z' .-]{1,50}?)\s*$",
+        event_name,
+        flags=re.IGNORECASE,
+    )
+    if not match:
+        return (None, None)
+
+    return (
+        _clean_entity_name(match.group(1)),
+        _clean_entity_name(match.group(2)),
+    )
 
 
 def _html_to_text(content: str) -> str:

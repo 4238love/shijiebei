@@ -13,6 +13,13 @@
       "priority": 2,
       "adapter": "webpage",
       "notes": "Official tournament fixtures page; use as authoritative schedule fallback."
+    },
+    {
+      "name": "oddsportal-world-cup-schedule",
+      "url": "https://www.oddsportal.com/football/world/world-championship-2026/",
+      "priority": 3,
+      "adapter": "webpage",
+      "notes": "Schema.org SportsEvent fallback for schedule cross-checking."
     }
   ],
   "team_form": [

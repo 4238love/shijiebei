@@ -322,6 +322,49 @@ def test_espn_scoreboard_adapter_extracts_team_form_facts_for_completed_matches(
     ).value == "win"
 
 
+def test_webpage_schedule_adapter_extracts_schema_org_sports_events():
+    tmp_path = workspace_tmp()
+    result = HttpWebpageDataSourceAdapter(
+        source_name="oddsportal-world-cup-schedule",
+        url="https://www.oddsportal.com/football/world/world-championship-2026/",
+        category=SourceCategory.SCHEDULE,
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=FakeHttpClient(
+            b"""
+            <html><body>
+              <script type="application/ld+json">
+              {
+                "@context": "https://schema.org",
+                "@type": ["Event", "SportsEvent"],
+                "sport": "football",
+                "name": "Haiti - Scotland",
+                "startDate": "2026-06-14T03:00:00+02:00"
+              }
+              </script>
+              <script type="application/ld+json">
+              {
+                "@context": "https://schema.org",
+                "@type": ["Event", "SportsEvent"],
+                "sport": "football",
+                "name": "Brazil - Morocco",
+                "startDate": "2026-06-14T00:00:00+02:00"
+              }
+              </script>
+            </body></html>
+            """
+        ),
+    ).ingest_snapshot()
+
+    assert result.status == "ingested"
+    assert result.item_count == 2
+    assert [
+        (fact.fact_type, fact.entity_key, fact.value) for fact in result.facts
+    ] == [
+        ("fixture_kickoff", "Haiti vs Scotland", "2026-06-14T03:00:00+02:00"),
+        ("fixture_kickoff", "Brazil vs Morocco", "2026-06-14T00:00:00+02:00"),
+    ]
+
+
 def test_webpage_adapter_saves_html_snapshot_and_extracts_injury_facts():
     tmp_path = workspace_tmp()
     http_client = FakeHttpClient(
