@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Query, Request, status
 from pydantic import BaseModel
 
 from app.cross_source_validation import (
@@ -14,6 +14,10 @@ from app.cross_source_validation import (
 from app.data_sources import ScheduleMatch, SourceIngestionResult, SourceSnapshot
 from app.source_config import SourceDefinition, load_source_catalog_config
 from app.source_ingestion import ingest_source_safely
+from app.source_snapshot_repository import (
+    SourceSnapshotMetadata,
+    SourceSnapshotRepository,
+)
 
 router = APIRouter(prefix="/sources", tags=["sources"])
 
@@ -40,6 +44,19 @@ class SourceIngestRequest(BaseModel):
 class SourceSnapshotResponse(BaseModel):
     path: str
     content_hash: str
+
+
+class SourceSnapshotMetadataResponse(BaseModel):
+    id: str
+    source_name: str
+    category: str | None
+    status: str
+    path: str
+    content_hash: str
+    item_count: int
+    fact_count: int
+    match_count: int
+    message: str | None
 
 
 class ScheduleMatchResponse(BaseModel):
@@ -74,6 +91,10 @@ class SourceIngestionResultResponse(BaseModel):
 
 class SourceIngestResponse(BaseModel):
     results: list[SourceIngestionResultResponse]
+
+
+class SourceSnapshotsResponse(BaseModel):
+    snapshots: list[SourceSnapshotMetadataResponse]
 
 
 class ValidatedFactResponse(BaseModel):
@@ -124,8 +145,24 @@ async def ingest_sources(payload: SourceIngestRequest, request: Request):
         )
         for definition in definitions
     ]
+    _record_snapshot_metadata(request, results)
     return SourceIngestResponse(
         results=[_ingestion_result_response(result) for result in results]
+    )
+
+
+@router.get("/snapshots", response_model=SourceSnapshotsResponse)
+async def list_source_snapshots(
+    request: Request,
+    limit: int = Query(default=50, ge=1, le=200),
+):
+    return SourceSnapshotsResponse(
+        snapshots=[
+            _snapshot_metadata_response(snapshot)
+            for snapshot in _source_snapshot_repository(request).list_recent(
+                limit=limit
+            )
+        ]
     )
 
 
@@ -151,6 +188,7 @@ async def validate_sources(payload: SourceIngestRequest, request: Request):
         )
         for definition in definitions
     ]
+    _record_snapshot_metadata(request, results)
     facts = [fact for result in results for fact in result.facts]
 
     return SourceValidateResponse(
@@ -168,6 +206,10 @@ def _source_config_path(request: Request) -> Path:
 
 def _source_snapshot_dir(request: Request) -> Path:
     return Path(request.app.state.source_snapshot_dir)
+
+
+def _source_snapshot_repository(request: Request) -> SourceSnapshotRepository:
+    return request.app.state.source_snapshot_repository
 
 
 def _matching_sources(
@@ -215,6 +257,47 @@ def _snapshot_response(snapshot: SourceSnapshot) -> SourceSnapshotResponse:
         path=str(snapshot.path),
         content_hash=snapshot.content_hash,
     )
+
+
+def _snapshot_metadata_response(
+    snapshot: SourceSnapshotMetadata,
+) -> SourceSnapshotMetadataResponse:
+    return SourceSnapshotMetadataResponse(
+        id=snapshot.id,
+        source_name=snapshot.source_name,
+        category=snapshot.category,
+        status=snapshot.status,
+        path=snapshot.path,
+        content_hash=snapshot.content_hash,
+        item_count=snapshot.item_count,
+        fact_count=snapshot.fact_count,
+        match_count=snapshot.match_count,
+        message=snapshot.message,
+    )
+
+
+def _record_snapshot_metadata(
+    request: Request,
+    results: list[SourceIngestionResult],
+) -> None:
+    repository = _source_snapshot_repository(request)
+    for result in results:
+        if result.snapshot is None:
+            continue
+        repository.save(
+            SourceSnapshotMetadata(
+                id="",
+                source_name=result.source_name,
+                category=result.category.value if result.category else None,
+                status=result.status.value,
+                path=str(result.snapshot.path),
+                content_hash=result.snapshot.content_hash,
+                item_count=result.item_count,
+                fact_count=len(result.facts),
+                match_count=len(result.matches),
+                message=result.message,
+            )
+        )
 
 
 def _match_response(match: ScheduleMatch) -> ScheduleMatchResponse:

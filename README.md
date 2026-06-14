@@ -19,8 +19,8 @@ Services:
 
 Docker Compose runs the backend with PostgreSQL-backed repositories for Match
 Predictions, Backtest Runs, Weight Recommendations, and the active Weight
-Version, plus AI Analysis Reports, so created records survive backend container
-restarts.
+Version, AI Analysis Reports, and Source Snapshot metadata, so created records
+survive backend container restarts.
 
 ## Development checks
 
@@ -53,6 +53,7 @@ The frontend Sources page includes an operations console for running snapshot-ba
 
 - `Run ingest`: fetches configured sources and extracts matches/facts.
 - `Run validate`: fetches configured sources, normalizes facts, and cross-checks them by source priority.
+- Recent Source Snapshot metadata is available in the same page and through `GET /sources/snapshots`.
 
 Webpage sources now return category-aware normalized facts when the static HTML contains extractable signals:
 

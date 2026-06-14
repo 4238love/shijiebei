@@ -14,6 +14,23 @@ type SourcesPayload = {
   sources: SourceItem[];
 };
 
+type SourceSnapshotMetadata = {
+  id: string;
+  source_name: string;
+  category: string | null;
+  status: string;
+  path: string;
+  content_hash: string;
+  item_count: number;
+  fact_count: number;
+  match_count: number;
+  message: string | null;
+};
+
+type SourceSnapshotsPayload = {
+  snapshots: SourceSnapshotMetadata[];
+};
+
 const implementedAdapters = new Set(["espn_scoreboard", "webpage"]);
 
 async function fetchSources(): Promise<SourcesPayload | null> {
@@ -21,6 +38,22 @@ async function fetchSources(): Promise<SourcesPayload | null> {
 
   try {
     const response = await fetch(`${backendUrl}/sources`, { cache: "no-store" });
+    if (!response.ok) {
+      return null;
+    }
+    return response.json();
+  } catch {
+    return null;
+  }
+}
+
+async function fetchSnapshots(): Promise<SourceSnapshotsPayload | null> {
+  const backendUrl = process.env.BACKEND_INTERNAL_URL ?? "http://localhost:8000";
+
+  try {
+    const response = await fetch(`${backendUrl}/sources/snapshots`, {
+      cache: "no-store",
+    });
     if (!response.ok) {
       return null;
     }
@@ -43,8 +76,12 @@ function adapterLabel(adapter: string) {
 }
 
 export default async function SourcesPage() {
-  const payload = await fetchSources();
+  const [payload, snapshotPayload] = await Promise.all([
+    fetchSources(),
+    fetchSnapshots(),
+  ]);
   const groups = payload ? groupByCategory(payload.sources) : {};
+  const recentSnapshots = snapshotPayload?.snapshots.slice(0, 6) ?? [];
 
   return (
     <main className="shell">
@@ -83,6 +120,30 @@ export default async function SourcesPage() {
               </strong>
             </article>
           </section>
+
+          {recentSnapshots.length ? (
+            <section className="source-category" aria-label="Recent snapshots">
+              <div className="source-category-header">
+                <p className="label">Recent snapshots</p>
+                <span>{recentSnapshots.length} records</span>
+              </div>
+              <div className="source-list">
+                {recentSnapshots.map((snapshot) => (
+                  <article className="source-card" key={snapshot.id}>
+                    <span className="source-pill source-pill-live">
+                      {snapshot.status}
+                    </span>
+                    <h2>{snapshot.source_name}</h2>
+                    <p>
+                      {snapshot.category ?? "uncategorized"} / facts{" "}
+                      {snapshot.fact_count} / matches {snapshot.match_count}
+                    </p>
+                    <p>{snapshot.path}</p>
+                  </article>
+                ))}
+              </div>
+            </section>
+          ) : null}
 
           <section className="source-grid">
             {Object.entries(groups).map(([category, sources]) => (

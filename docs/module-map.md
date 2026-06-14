@@ -29,6 +29,10 @@ This map summarizes the current implementation using the project glossary.
   - Converts fixture or HTTP JSON source material into a Prediction Dataset.
   - `config/sources.example.json` records first-wave source categories and placeholder URLs.
 
+- `backend/app/source_snapshot_repository.py`
+  - Owns Source Snapshot metadata persistence for snapshot path, content hash, category, status, and extracted fact/match counts.
+  - Provides in-memory storage for tests/local seams and PostgreSQL storage for Docker deployment.
+
 - `backend/app/cross_source_validation.py`
   - Owns `NormalizedFact`, `ValidatedFact`, `ConflictStatus`, and `CrossSourceValidator`.
   - Applies Source Priority and emits confirmed, conflicting, missing, or stale facts.
@@ -73,4 +77,4 @@ This map summarizes the current implementation using the project glossary.
 
 ## Known next deepening opportunity
 
-`PostgresPredictionRepository`, `PostgresBacktestRepository`, `PostgresWeightRepository`, and `PostgresAIReportRepository` persist serialized API payloads. Future deepening should add richer query seams for Prediction Dataset references, Weight Version lineage, report provenance, and actual results instead of treating those records as opaque documents.
+`PostgresPredictionRepository`, `PostgresBacktestRepository`, `PostgresWeightRepository`, `PostgresAIReportRepository`, and `PostgresSourceSnapshotRepository` persist serialized API payloads or snapshot metadata. Future deepening should add richer query seams for Prediction Dataset references, Weight Version lineage, report provenance, and actual results instead of treating those records as opaque documents.

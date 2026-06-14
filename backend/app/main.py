@@ -12,6 +12,10 @@ from app.methodology_api import router as methodology_router
 from app.prediction_api import router as prediction_router
 from app.prediction_repository import PredictionRepository, default_prediction_repository
 from app.source_api import router as source_router
+from app.source_snapshot_repository import (
+    SourceSnapshotRepository,
+    default_source_snapshot_repository,
+)
 from app.weight_repository import default_weight_repository
 from app.weight_api import create_weight_registry, router as weight_router
 from app.weights import WeightRecommendationRepository
@@ -30,6 +34,7 @@ def create_app(
     backtest_repository: BacktestRepository | None = None,
     weight_repository: WeightRecommendationRepository | None = None,
     ai_report_repository: AIReportRepository | None = None,
+    source_snapshot_repository: SourceSnapshotRepository | None = None,
     *,
     source_config_path: Path | None = None,
     source_snapshot_dir: Path | None = None,
@@ -43,6 +48,9 @@ def create_app(
     )
     app.state.source_config_path = source_config_path or _default_source_config_path()
     app.state.source_snapshot_dir = source_snapshot_dir or Path(".scratch/source-snapshots")
+    app.state.source_snapshot_repository = (
+        source_snapshot_repository or default_source_snapshot_repository()
+    )
     app.state.source_http_client = source_http_client
     app.state.weight_registry = create_weight_registry(
         repository=weight_repository or default_weight_repository()

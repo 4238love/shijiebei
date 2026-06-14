@@ -10,6 +10,7 @@ from app.data_sources import (
     SourceCategory,
 )
 from app.main import create_app
+from app.source_snapshot_repository import InMemorySourceSnapshotRepository
 
 
 class FakeResponse:
@@ -536,6 +537,65 @@ def test_sources_api_ingests_espn_scoreboard_source():
     assert body["results"][0]["item_count"] == 1
     assert body["results"][0]["matches"][0]["home_team"] == "Mexico"
     assert body["results"][0]["matches"][0]["away_team"] == "Canada"
+
+
+def test_sources_api_records_snapshot_metadata():
+    tmp_path = workspace_tmp()
+    config_path = tmp_path / "sources.json"
+    write_sources_config(config_path)
+    repository = InMemorySourceSnapshotRepository()
+    client = TestClient(
+        create_app(
+            source_config_path=config_path,
+            source_snapshot_dir=tmp_path / "snapshots",
+            source_http_client=FakeHttpClient(espn_scoreboard_payload()),
+            source_snapshot_repository=repository,
+        )
+    )
+
+    response = client.post(
+        "/sources/ingest",
+        json={"category": "schedule", "source_name": "espn-world-cup-scoreboard"},
+    )
+
+    assert response.status_code == 200
+    metadata = repository.list_recent()
+    assert len(metadata) == 1
+    assert metadata[0].source_name == "espn-world-cup-scoreboard"
+    assert metadata[0].category == "schedule"
+    assert metadata[0].status == "ingested"
+    assert metadata[0].path.endswith(".json")
+    assert metadata[0].content_hash
+    assert metadata[0].item_count == 1
+    assert metadata[0].fact_count == 1
+    assert metadata[0].match_count == 1
+
+
+def test_sources_api_lists_recorded_snapshot_metadata():
+    tmp_path = workspace_tmp()
+    config_path = tmp_path / "sources.json"
+    write_sources_config(config_path)
+    repository = InMemorySourceSnapshotRepository()
+    client = TestClient(
+        create_app(
+            source_config_path=config_path,
+            source_snapshot_dir=tmp_path / "snapshots",
+            source_http_client=FakeHttpClient(espn_scoreboard_payload()),
+            source_snapshot_repository=repository,
+        )
+    )
+    client.post(
+        "/sources/ingest",
+        json={"category": "schedule", "source_name": "espn-world-cup-scoreboard"},
+    )
+
+    response = client.get("/sources/snapshots")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["snapshots"][0]["source_name"] == "espn-world-cup-scoreboard"
+    assert body["snapshots"][0]["category"] == "schedule"
+    assert body["snapshots"][0]["status"] == "ingested"
 
 
 def test_sources_api_ingests_configured_webpage_snapshot_with_normalized_facts():
