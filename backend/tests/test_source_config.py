@@ -142,3 +142,31 @@ def test_local_source_config_uses_dedicated_oddsportal_odds_adapter():
 
     assert len(oddsportal_sources) == 1
     assert oddsportal_sources[0].adapter == "oddsportal_odds"
+
+
+def test_local_source_config_uses_dedicated_fifa_teams_adapter():
+    config = load_source_catalog_config(Path("config/sources.local.json"))
+
+    fifa_team_sources = [
+        source for source in config.sources if source.name == "fifa-world-cup-teams"
+    ]
+
+    assert len(fifa_team_sources) == 1
+    assert fifa_team_sources[0].adapter == "fifa_teams"
+
+
+def test_local_source_config_uses_dedicated_world_elo_team_form_adapter():
+    config = load_source_catalog_config(Path("config/sources.local.json"))
+
+    elo_team_form_sources = [
+        source for source in config.sources if source.name == "world-football-elo"
+    ]
+
+    assert len(elo_team_form_sources) == 1
+    assert elo_team_form_sources[0].adapter == "world_football_elo"
+
+
+def test_local_source_config_has_no_generic_webpage_adapters():
+    config = load_source_catalog_config(Path("config/sources.local.json"))
+
+    assert [source.name for source in config.sources if source.adapter == "webpage"] == []

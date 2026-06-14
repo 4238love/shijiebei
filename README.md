@@ -64,7 +64,8 @@ The frontend Sources page includes an operations console for running snapshot-ba
 - `Run validate`: fetches configured sources, normalizes facts, and cross-checks them by source priority.
 - Recent Source Snapshot metadata is available in the same page and through `GET /sources/snapshots`.
 
-Webpage sources now return category-aware normalized facts when the static HTML contains extractable signals:
+Configured source adapters now return category-aware normalized facts when
+snapshots contain extractable signals:
 
 - `fixture_kickoff`
 - `injury_availability`
@@ -74,10 +75,13 @@ Webpage sources now return category-aware normalized facts when the static HTML 
 - `team_news_sentiment`
 - `player_presence`
 - `team_listed_player_count`
+- `team_presence`
 
 World Football Elo uses a dedicated adapter that snapshots `World.tsv` plus
 `en.teams.tsv`, maps country codes to team names, and emits `team_rating` /
-`team_ranking_position` facts.
+`team_ranking_position` facts. The same adapter is also used for the Elo
+team-form context source so both Elo entries are fetched through stable TSV
+endpoints rather than generic page scraping.
 FIFA ranking uses a dedicated adapter for the official men's ranking page; it
 extracts embedded ranking JSON when present and falls back to static page text
 for `team_rating` / `team_ranking_position` facts.
@@ -176,6 +180,8 @@ manually listing one squad page per team.
 Transfermarkt's World Cup squad page is configured as a secondary player-data
 target using the dedicated `transfermarkt_squads` adapter for squad/player
 cross-checking.
+The official FIFA teams fallback uses the dedicated `fifa_teams` adapter to
+extract `SportsTeam` metadata into `team_presence` facts for cross-checking.
 Delete the matching file under `.scratch/source-snapshots/` when an operator
 needs to force an immediate ESPN discovery refresh.
 
@@ -206,8 +212,9 @@ on its configured target interval.
 
 FIFA, Transfermarkt, OddsPortal, OddsChecker, BBC, and Elo pages are configured
 as crawl targets. Dedicated parsers should be added as separate adapters when a
-source needs more than the generic webpage parser; current dedicated adapters
+source needs more than static page capture; current dedicated adapters
 cover ESPN discovery, Schema.org schedules, FIFA ranking, Sports Mole injuries,
 Transfermarkt injuries, injury-news fallbacks, news sentiment, and World
 Football Elo, plus OddsPortal/BetExplorer/OddsChecker odds and Transfermarkt
-squad rows.
+squad rows. The local source catalog no longer uses the generic `webpage`
+adapter.

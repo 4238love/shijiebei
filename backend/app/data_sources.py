@@ -510,6 +510,72 @@ class EspnTeamRosterDiscoveryDataSourceAdapter:
         return httpx
 
 
+class FifaTeamsDataSourceAdapter:
+    def __init__(
+        self,
+        *,
+        source_name: str,
+        url: str,
+        category: SourceCategory | None = SourceCategory.PLAYER,
+        snapshot_dir: Path,
+        http_client=None,
+        timeout_seconds: int = 10,
+    ):
+        self.source_name = source_name
+        self.url = url
+        self.category = category
+        self.snapshot_dir = Path(snapshot_dir)
+        self.http_client = http_client
+        self.timeout_seconds = timeout_seconds
+
+    def ingest_teams(self) -> SourceIngestionResult:
+        snapshot = self.fetch_snapshot()
+        content = snapshot.path.read_text(encoding="utf-8", errors="ignore")
+        facts = tuple(
+            _fifa_team_facts_from_html(content, source_name=self.source_name)
+            or _player_facts(content, source_name=self.source_name)
+        )
+
+        return SourceIngestionResult(
+            source_name=self.source_name,
+            category=self.category,
+            status=SourceIngestionStatus.INGESTED,
+            item_count=len(facts),
+            snapshot=snapshot,
+            facts=facts,
+            message=_webpage_ingestion_message(facts),
+        )
+
+    def fetch_snapshot(self) -> SourceSnapshot:
+        response = _http_get_webpage(
+            self._http_client(),
+            self.url,
+            timeout_seconds=self.timeout_seconds,
+        )
+        response.raise_for_status()
+        content = response.content
+        content_hash = sha256(content).hexdigest()
+        self.snapshot_dir.mkdir(parents=True, exist_ok=True)
+        snapshot_path = (
+            self.snapshot_dir / f"{_safe_name(self.source_name)}-{content_hash[:12]}.html"
+        )
+        snapshot_path.write_bytes(content)
+
+        return SourceSnapshot(
+            source_name=self.source_name,
+            path=snapshot_path,
+            content_hash=content_hash,
+        )
+
+    def _http_client(self):
+        if self.http_client is not None:
+            return self.http_client
+
+        import httpx
+
+        return httpx
+
+
 class HttpWebpageDataSourceAdapter:
     def __init__(
         self,
@@ -2834,6 +2900,32 @@ def _sentiment_from_text(text: str) -> tuple[str, int, int]:
         sentiment = "positive"
 
     return (sentiment, positive_count, negative_count)
+
+
+def _fifa_team_facts_from_html(
+    content: str,
+    *,
+    source_name: str,
+) -> list[NormalizedFact]:
+    facts: list[NormalizedFact] = []
+    seen: set[str] = set()
+    for item in _schema_org_json_ld_items(content):
+        if not _schema_org_item_has_type(item, "SportsTeam"):
+            continue
+        team_name = _schema_org_text_field(item, "name")
+        if team_name is None or team_name in seen:
+            continue
+        seen.add(team_name)
+        facts.append(
+            NormalizedFact(
+                fact_type="team_presence",
+                entity_key=team_name,
+                value="listed",
+                source_name=source_name,
+            )
+        )
+
+    return facts
 
 
 def _player_facts(text: str, *, source_name: str) -> list[NormalizedFact]:

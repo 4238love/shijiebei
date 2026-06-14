@@ -9,6 +9,7 @@ from app.data_sources import (
     EspnTeamRosterDiscoveryDataSourceAdapter,
     EspnTeamScheduleDiscoveryDataSourceAdapter,
     FifaRankingDataSourceAdapter,
+    FifaTeamsDataSourceAdapter,
     HttpWebpageDataSourceAdapter,
     InjuryNewsDataSourceAdapter,
     NewsSentimentDataSourceAdapter,
@@ -59,6 +60,16 @@ def ingest_source(
             snapshot_dir=snapshot_dir,
             http_client=http_client,
         ).ingest_players()
+        return replace(result, category=definition.category)
+
+    if definition.adapter == "fifa_teams":
+        result = FifaTeamsDataSourceAdapter(
+            source_name=definition.name,
+            url=definition.url,
+            category=definition.category,
+            snapshot_dir=snapshot_dir,
+            http_client=http_client,
+        ).ingest_teams()
         return replace(result, category=definition.category)
 
     if definition.adapter == "webpage":

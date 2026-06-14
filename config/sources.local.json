@@ -41,8 +41,8 @@
       "name": "world-football-elo",
       "url": "https://www.eloratings.net/",
       "priority": 3,
-      "adapter": "webpage",
-      "notes": "National team Elo ratings and match history context."
+      "adapter": "world_football_elo",
+      "notes": "National team Elo ratings context fetched through World.tsv and en.teams.tsv."
     }
   ],
   "ranking": [
@@ -142,8 +142,8 @@
       "name": "fifa-world-cup-teams",
       "url": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026/teams",
       "priority": 2,
-      "adapter": "webpage",
-      "notes": "Official team list fallback."
+      "adapter": "fifa_teams",
+      "notes": "Official team list fallback; parses SportsTeam metadata for cross-checking qualified teams."
     },
     {
       "name": "transfermarkt-world-cup-2026-squads",

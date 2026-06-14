@@ -10,6 +10,7 @@ from app.data_sources import (
     EspnTeamRosterDiscoveryDataSourceAdapter,
     EspnTeamScheduleDiscoveryDataSourceAdapter,
     FifaRankingDataSourceAdapter,
+    FifaTeamsDataSourceAdapter,
     HttpWebpageDataSourceAdapter,
     InjuryNewsDataSourceAdapter,
     NewsSentimentDataSourceAdapter,
@@ -1111,6 +1112,36 @@ def test_webpage_adapter_extracts_team_listed_player_count_from_espn_squad_sourc
     }
 
 
+def test_fifa_teams_adapter_extracts_schema_org_team_presence():
+    tmp_path = workspace_tmp()
+    result = FifaTeamsDataSourceAdapter(
+        source_name="fifa-world-cup-teams",
+        url="https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026/teams",
+        category=SourceCategory.PLAYER,
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=FakeHttpClient(
+            b"""
+            <html><script type="application/ld+json">
+            {"@graph":[
+              {"@type":"SportsTeam","name":"Brazil"},
+              {"@type":["Thing","SportsTeam"],"name":"Morocco"}
+            ]}
+            </script></html>
+            """
+        ),
+    ).ingest_teams()
+
+    assert result.status == "ingested"
+    assert result.snapshot is not None
+    assert result.item_count == 2
+    assert [
+        (fact.fact_type, fact.entity_key, fact.value) for fact in result.facts
+    ] == [
+        ("team_presence", "Brazil", "listed"),
+        ("team_presence", "Morocco", "listed"),
+    ]
+
+
 def test_espn_team_roster_discovery_fetches_rosters_from_team_index():
     tmp_path = workspace_tmp()
     teams_url = "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/teams"
@@ -2112,6 +2143,59 @@ def test_source_ingestion_routes_transfermarkt_squad_adapter():
     assert result.status == "ingested"
     assert result.facts[0].fact_type == "player_presence"
     assert result.facts[0].source_name == "transfermarkt-world-cup-2026-squads"
+
+
+def test_source_ingestion_routes_fifa_teams_adapter():
+    tmp_path = workspace_tmp()
+    url = "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026/teams"
+
+    result = ingest_source(
+        SourceDefinition(
+            category=SourceCategory.PLAYER,
+            name="fifa-world-cup-teams",
+            url=url,
+            priority=2,
+            adapter="fifa_teams",
+        ),
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=FakeHttpClient(
+            b"""
+            <html><script type="application/ld+json">
+            {"@type":"SportsTeam","name":"Brazil"}
+            </script></html>
+            """
+        ),
+    )
+
+    assert result.status == "ingested"
+    assert result.facts[0].fact_type == "team_presence"
+    assert result.facts[0].source_name == "fifa-world-cup-teams"
+
+
+def test_source_ingestion_routes_world_football_elo_for_team_form_context():
+    tmp_path = workspace_tmp()
+    http_client = UrlMappedHttpClient(
+        {
+            "https://www.eloratings.net/World.tsv": b"7\t7\tBR\t1978\n",
+            "https://www.eloratings.net/en.teams.tsv": b"BR\tBrazil\n",
+        }
+    )
+
+    result = ingest_source(
+        SourceDefinition(
+            category=SourceCategory.TEAM_FORM,
+            name="world-football-elo",
+            url="https://www.eloratings.net/",
+            priority=3,
+            adapter="world_football_elo",
+        ),
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=http_client,
+    )
+
+    assert result.status == "ingested"
+    assert result.category == SourceCategory.TEAM_FORM
+    assert result.facts[0].entity_key == "Brazil"
 
 
 def test_sources_api_lists_configured_source_catalog():
