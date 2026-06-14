@@ -117,3 +117,17 @@ def test_local_source_config_uses_dedicated_news_sentiment_adapter():
 
     assert len(news_sources) == 2
     assert {source.adapter for source in news_sources} == {"news_sentiment"}
+
+
+def test_local_source_config_uses_dedicated_injury_news_adapter():
+    config = load_source_catalog_config(Path("config/sources.local.json"))
+
+    injury_news_sources = [
+        source
+        for source in config.sources
+        if source.name
+        in {"bbc-world-cup-football-injuries", "fifa-world-cup-news-injuries"}
+    ]
+
+    assert len(injury_news_sources) == 2
+    assert {source.adapter for source in injury_news_sources} == {"injury_news"}

@@ -104,6 +104,8 @@ World Cup injury index, follows article links, then parses team
 `config/sources.local.json` also includes Transfermarkt as a secondary injury
 target using the dedicated `transfermarkt_injuries` adapter, so availability
 signals can be checked against Sports Mole, BBC, and FIFA news pages.
+BBC/FIFA injury-news fallbacks use the dedicated `injury_news` adapter, which
+extracts Schema.org article text before applying the same availability parser.
 
 News sentiment sources use the dedicated `news_sentiment` adapter. It extracts
 Schema.org `NewsArticle` / `Article` headline, description, and body fields when
@@ -203,5 +205,6 @@ FIFA, Transfermarkt, OddsPortal, OddsChecker, BBC, and Elo pages are configured
 as crawl targets. Dedicated parsers should be added as separate adapters when a
 source needs more than the generic webpage parser; current dedicated adapters
 cover ESPN discovery, Schema.org schedules, FIFA ranking, Sports Mole injuries,
-Transfermarkt injuries, news sentiment, and World Football Elo, plus
-BetExplorer/OddsChecker match-card odds and Transfermarkt squad rows.
+Transfermarkt injuries, injury-news fallbacks, news sentiment, and World
+Football Elo, plus BetExplorer/OddsChecker match-card odds and Transfermarkt
+squad rows.

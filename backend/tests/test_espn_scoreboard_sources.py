@@ -11,6 +11,7 @@ from app.data_sources import (
     EspnTeamScheduleDiscoveryDataSourceAdapter,
     FifaRankingDataSourceAdapter,
     HttpWebpageDataSourceAdapter,
+    InjuryNewsDataSourceAdapter,
     NewsSentimentDataSourceAdapter,
     OddsCheckerOddsDataSourceAdapter,
     SchemaOrgScheduleDataSourceAdapter,
@@ -917,6 +918,33 @@ def test_webpage_adapter_does_not_treat_article_title_colon_as_team_injury_segme
     assert result.facts == ()
 
 
+def test_injury_news_adapter_extracts_schema_org_article_injuries():
+    tmp_path = workspace_tmp()
+    result = InjuryNewsDataSourceAdapter(
+        source_name="bbc-world-cup-football-injuries",
+        url="https://www.bbc.com/sport/football/world-cup",
+        category=SourceCategory.INJURY,
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=FakeHttpClient(
+            b"""
+            <html><script type="application/ld+json">
+            {"@type":"NewsArticle","headline":"World Cup injury latest",
+             "description":"Neymar is doubtful. Vinicius Junior suspended."}
+            </script></html>
+            """
+        ),
+    ).ingest_injuries()
+
+    assert result.status == "ingested"
+    assert result.snapshot is not None
+    assert ("injury_availability", "Neymar", "doubtful") in {
+        (fact.fact_type, fact.entity_key, fact.value) for fact in result.facts
+    }
+    assert ("injury_availability", "Vinicius Junior", "suspended") in {
+        (fact.fact_type, fact.entity_key, fact.value) for fact in result.facts
+    }
+
+
 def test_webpage_adapter_extracts_odds_news_sentiment_and_player_facts():
     tmp_path = workspace_tmp()
 
@@ -1746,6 +1774,27 @@ def test_source_ingestion_routes_news_sentiment_adapter():
 
     assert result.status == "ingested"
     assert result.facts[0].fact_type == "news_sentiment"
+
+
+def test_source_ingestion_routes_injury_news_adapter():
+    tmp_path = workspace_tmp()
+
+    result = ingest_source(
+        SourceDefinition(
+            category=SourceCategory.INJURY,
+            name="bbc-world-cup-football-injuries",
+            url="https://www.bbc.com/sport/football/world-cup",
+            priority=3,
+            adapter="injury_news",
+        ),
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=FakeHttpClient(
+            b"<html><body>Neymar is doubtful. Vinicius Junior suspended.</body></html>"
+        ),
+    )
+
+    assert result.status == "ingested"
+    assert result.facts[0].fact_type == "injury_availability"
 
 
 def test_source_ingestion_routes_espn_team_schedule_discovery_adapter():

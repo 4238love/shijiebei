@@ -10,6 +10,7 @@ from app.data_sources import (
     EspnTeamScheduleDiscoveryDataSourceAdapter,
     FifaRankingDataSourceAdapter,
     HttpWebpageDataSourceAdapter,
+    InjuryNewsDataSourceAdapter,
     NewsSentimentDataSourceAdapter,
     OddsCheckerOddsDataSourceAdapter,
     SchemaOrgScheduleDataSourceAdapter,
@@ -97,6 +98,16 @@ def ingest_source(
             snapshot_dir=snapshot_dir,
             http_client=http_client,
         ).ingest_news()
+        return replace(result, category=definition.category)
+
+    if definition.adapter == "injury_news":
+        result = InjuryNewsDataSourceAdapter(
+            source_name=definition.name,
+            url=definition.url,
+            category=definition.category,
+            snapshot_dir=snapshot_dir,
+            http_client=http_client,
+        ).ingest_injuries()
         return replace(result, category=definition.category)
 
     if definition.adapter == "sportsmole_injuries":

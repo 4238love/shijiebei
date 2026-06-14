@@ -80,15 +80,15 @@
       "name": "bbc-world-cup-football-injuries",
       "url": "https://www.bbc.com/sport/football/world-cup",
       "priority": 3,
-      "adapter": "webpage",
-      "notes": "Accessible news feed used for first-wave injury signal extraction."
+      "adapter": "injury_news",
+      "notes": "Accessible news feed used for first-wave injury signal extraction from article metadata and page text."
     },
     {
       "name": "fifa-world-cup-news-injuries",
       "url": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026/news",
       "priority": 4,
-      "adapter": "webpage",
-      "notes": "Official news fallback for availability reports."
+      "adapter": "injury_news",
+      "notes": "Official news fallback for availability reports from article metadata and page text."
     }
   ],
   "odds": [
