@@ -9,6 +9,7 @@ from app.methodology_api import router as methodology_router
 from app.prediction_api import router as prediction_router
 from app.prediction_repository import PredictionRepository, default_prediction_repository
 from app.source_api import router as source_router
+from app.weight_api import create_weight_registry, router as weight_router
 
 
 def _default_source_config_path() -> Path:
@@ -32,6 +33,7 @@ def create_app(
     app.state.source_snapshot_dir = source_snapshot_dir or Path(".scratch/source-snapshots")
     app.state.source_http_client = source_http_client
     app.state.backtest_runs = {}
+    app.state.weight_registry = create_weight_registry()
 
     app.add_middleware(
         CORSMiddleware,
@@ -46,6 +48,7 @@ def create_app(
     app.include_router(methodology_router)
     app.include_router(source_router)
     app.include_router(backtest_router)
+    app.include_router(weight_router)
     return app
 
 
