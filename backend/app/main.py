@@ -3,6 +3,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.backtest_api import router as backtest_router
 from app.health import router as health_router
 from app.methodology_api import router as methodology_router
 from app.prediction_api import router as prediction_router
@@ -30,6 +31,7 @@ def create_app(
     app.state.source_config_path = source_config_path or _default_source_config_path()
     app.state.source_snapshot_dir = source_snapshot_dir or Path(".scratch/source-snapshots")
     app.state.source_http_client = source_http_client
+    app.state.backtest_runs = {}
 
     app.add_middleware(
         CORSMiddleware,
@@ -43,6 +45,7 @@ def create_app(
     app.include_router(prediction_router)
     app.include_router(methodology_router)
     app.include_router(source_router)
+    app.include_router(backtest_router)
     return app
 
 
