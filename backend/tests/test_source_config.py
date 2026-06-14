@@ -104,3 +104,16 @@ def test_local_source_config_uses_dedicated_schema_org_schedule_adapter():
 
     assert len(schedule_sources) == 2
     assert {source.adapter for source in schedule_sources} == {"schema_org_schedule"}
+
+
+def test_local_source_config_uses_dedicated_news_sentiment_adapter():
+    config = load_source_catalog_config(Path("config/sources.local.json"))
+
+    news_sources = [
+        source
+        for source in config.sources
+        if source.name in {"bbc-world-cup-football", "fifa-world-cup-news"}
+    ]
+
+    assert len(news_sources) == 2
+    assert {source.adapter for source in news_sources} == {"news_sentiment"}

@@ -644,6 +644,74 @@ class SchemaOrgScheduleDataSourceAdapter:
         return httpx
 
 
+class NewsSentimentDataSourceAdapter:
+    def __init__(
+        self,
+        *,
+        source_name: str,
+        url: str,
+        category: SourceCategory | None = SourceCategory.NEWS_SENTIMENT,
+        snapshot_dir: Path,
+        http_client=None,
+        timeout_seconds: int = 10,
+    ):
+        self.source_name = source_name
+        self.url = url
+        self.category = category
+        self.snapshot_dir = Path(snapshot_dir)
+        self.http_client = http_client
+        self.timeout_seconds = timeout_seconds
+
+    def ingest_news(self) -> SourceIngestionResult:
+        snapshot = self.fetch_snapshot()
+        content = snapshot.path.read_text(encoding="utf-8", errors="ignore")
+        facts = tuple(
+            _news_sentiment_facts(
+                _news_text_from_schema_org_articles(content) or _html_to_text(content),
+                source_name=self.source_name,
+            )
+        )
+
+        return SourceIngestionResult(
+            source_name=self.source_name,
+            category=self.category,
+            status=SourceIngestionStatus.INGESTED,
+            item_count=len(facts),
+            snapshot=snapshot,
+            facts=facts,
+            message=_webpage_ingestion_message(facts),
+        )
+
+    def fetch_snapshot(self) -> SourceSnapshot:
+        response = _http_get_webpage(
+            self._http_client(),
+            self.url,
+            timeout_seconds=self.timeout_seconds,
+        )
+        response.raise_for_status()
+        content = response.content
+        content_hash = sha256(content).hexdigest()
+        self.snapshot_dir.mkdir(parents=True, exist_ok=True)
+        snapshot_path = (
+            self.snapshot_dir / f"{_safe_name(self.source_name)}-{content_hash[:12]}.html"
+        )
+        snapshot_path.write_bytes(content)
+
+        return SourceSnapshot(
+            source_name=self.source_name,
+            path=snapshot_path,
+            content_hash=content_hash,
+        )
+
+    def _http_client(self):
+        if self.http_client is not None:
+            return self.http_client
+
+        import httpx
+
+        return httpx
+
+
 class SportsMoleInjuryDataSourceAdapter:
     max_articles = 12
 
@@ -2488,6 +2556,40 @@ def _match_line_odds_facts(text: str, *, source_name: str) -> list[NormalizedFac
         )
 
     return facts
+
+
+def _news_text_from_schema_org_articles(content: str) -> str:
+    article_fragments: list[str] = []
+    for item in _schema_org_json_ld_items(content):
+        if not (
+            _schema_org_item_has_type(item, "NewsArticle")
+            or _schema_org_item_has_type(item, "Article")
+        ):
+            continue
+        parts = [
+            _schema_org_text_field(item, key)
+            for key in ("headline", "name", "description", "articleBody")
+        ]
+        article_text = ". ".join(part for part in parts if part)
+        if article_text:
+            article_fragments.append(article_text)
+
+    return ". ".join(article_fragments)
+
+
+def _schema_org_text_field(item: dict, key: str) -> str | None:
+    value = item.get(key)
+    if isinstance(value, str):
+        text = _clean_entity_name(value)
+        return text or None
+    if isinstance(value, list):
+        text = " ".join(
+            _clean_entity_name(part)
+            for part in value
+            if isinstance(part, str) and _clean_entity_name(part)
+        )
+        return text or None
+    return None
 
 
 def _news_sentiment_facts(text: str, *, source_name: str) -> list[NormalizedFact]:

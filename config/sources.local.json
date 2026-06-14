@@ -119,15 +119,15 @@
       "name": "bbc-world-cup-football",
       "url": "https://www.bbc.com/sport/football/world-cup",
       "priority": 1,
-      "adapter": "webpage",
-      "notes": "News sentiment and tactical narrative source."
+      "adapter": "news_sentiment",
+      "notes": "News sentiment and tactical narrative source; parses article metadata and page text."
     },
     {
       "name": "fifa-world-cup-news",
       "url": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026/news",
       "priority": 2,
-      "adapter": "webpage",
-      "notes": "Official news source."
+      "adapter": "news_sentiment",
+      "notes": "Official news source for article-level sentiment signals."
     }
   ],
   "player": [

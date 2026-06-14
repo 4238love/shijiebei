@@ -11,6 +11,7 @@ from app.data_sources import (
     EspnTeamScheduleDiscoveryDataSourceAdapter,
     FifaRankingDataSourceAdapter,
     HttpWebpageDataSourceAdapter,
+    NewsSentimentDataSourceAdapter,
     OddsCheckerOddsDataSourceAdapter,
     SchemaOrgScheduleDataSourceAdapter,
     SportsMoleInjuryDataSourceAdapter,
@@ -976,6 +977,34 @@ def test_webpage_adapter_extracts_team_news_sentiment_from_team_segments():
     }
 
 
+def test_news_sentiment_adapter_extracts_schema_org_article_text():
+    tmp_path = workspace_tmp()
+    result = NewsSentimentDataSourceAdapter(
+        source_name="bbc-world-cup-football",
+        url="https://www.bbc.com/sport/football/world-cup",
+        category=SourceCategory.NEWS_SENTIMENT,
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=FakeHttpClient(
+            b"""
+            <html><script type="application/ld+json">
+            {"@type":"NewsArticle","headline":"Brazil injury concern",
+             "description":"Morocco confident after strong win"}
+            </script></html>
+            """
+        ),
+    ).ingest_news()
+
+    assert result.status == "ingested"
+    assert result.snapshot is not None
+    assert result.facts[0].fact_type == "news_sentiment"
+    assert ("team_news_sentiment", "Brazil", "negative") in {
+        (fact.fact_type, fact.entity_key, fact.value) for fact in result.facts
+    }
+    assert ("team_news_sentiment", "Morocco", "positive") in {
+        (fact.fact_type, fact.entity_key, fact.value) for fact in result.facts
+    }
+
+
 def test_webpage_adapter_ignores_lowercase_news_colon_fragments_as_team_sentiment():
     tmp_path = workspace_tmp()
     result = HttpWebpageDataSourceAdapter(
@@ -1696,6 +1725,27 @@ def test_source_ingestion_routes_schema_org_schedule_adapter():
 
     assert result.status == "ingested"
     assert result.facts[0].entity_key == "Brazil vs Morocco"
+
+
+def test_source_ingestion_routes_news_sentiment_adapter():
+    tmp_path = workspace_tmp()
+
+    result = ingest_source(
+        SourceDefinition(
+            category=SourceCategory.NEWS_SENTIMENT,
+            name="bbc-world-cup-football",
+            url="https://www.bbc.com/sport/football/world-cup",
+            priority=1,
+            adapter="news_sentiment",
+        ),
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=FakeHttpClient(
+            b"<html><body>Brazil injury concern but Morocco confident</body></html>"
+        ),
+    )
+
+    assert result.status == "ingested"
+    assert result.facts[0].fact_type == "news_sentiment"
 
 
 def test_source_ingestion_routes_espn_team_schedule_discovery_adapter():
