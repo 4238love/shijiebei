@@ -1,6 +1,8 @@
 from fastapi.testclient import TestClient
 
 from app.ai_report_repository import InMemoryAIReportRepository
+from app.ai_report_api import _provider
+from app.ai_reports import OpenAICompatibleAIReportProvider
 from app.main import create_app
 
 
@@ -103,3 +105,22 @@ def test_unknown_ai_report_provider_is_rejected():
 
     assert response.status_code == 400
     assert response.json()["detail"] == "Only deepseek and gpt providers are supported"
+
+
+def test_ai_report_provider_factory_uses_live_http_provider_when_enabled(monkeypatch):
+    monkeypatch.setenv("AI_REPORT_MODE", "live")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+
+    provider = _provider("gpt")
+
+    assert isinstance(provider, OpenAICompatibleAIReportProvider)
+    assert provider.provider_name == "gpt"
+
+
+def test_ai_report_provider_factory_defaults_to_template_provider(monkeypatch):
+    monkeypatch.delenv("AI_REPORT_MODE", raising=False)
+
+    provider = _provider("deepseek")
+
+    assert provider.provider_name == "deepseek"
+    assert not isinstance(provider, OpenAICompatibleAIReportProvider)

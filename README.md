@@ -2,6 +2,12 @@
 
 DeepSeek/GPT assisted football prediction system. The Prediction Engine owns probabilities; AI providers generate analysis reports and reviewed weight recommendations only.
 
+AI reports default to deterministic template mode for local development. Set
+`AI_REPORT_MODE=live` plus `OPENAI_API_KEY` and/or `DEEPSEEK_API_KEY` to call
+OpenAI-compatible Chat Completions endpoints for GPT or DeepSeek reports. Live
+providers receive structured prediction/source evidence and cannot mutate saved
+probabilities or active weights.
+
 ## Local startup
 
 ```powershell

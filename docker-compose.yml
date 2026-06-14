@@ -25,6 +25,9 @@ services:
       BACKTEST_REPOSITORY: postgres
       WEIGHT_REPOSITORY: postgres
       AI_REPORT_REPOSITORY: postgres
+      AI_REPORT_MODE: ${AI_REPORT_MODE:-template}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
       SOURCE_SNAPSHOT_REPOSITORY: postgres
       JOB_RUN_REPOSITORY: postgres
       ENABLE_SCHEDULER: ${ENABLE_SCHEDULER:-false}

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from typing import Any
 from uuid import uuid4
 
@@ -7,7 +8,12 @@ from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
 from app.ai_report_repository import AIReportRepository
-from app.ai_reports import AIAnalysisReport, AIProviderConfig, generate_ai_analysis_report
+from app.ai_reports import (
+    AIAnalysisReport,
+    AIProviderConfig,
+    OpenAICompatibleAIReportProvider,
+    generate_ai_analysis_report,
+)
 from app.cross_source_validation import ConflictStatus, ValidatedFact
 from app.prediction_engine import MatchPrediction, ScorelineProbability
 
@@ -95,16 +101,21 @@ async def get_ai_report(report_id: str, request: Request):
     return report
 
 
-def _provider(provider_name: str) -> TemplateAIReportProvider:
+def _provider(provider_name: str):
     if provider_name == "deepseek":
-        return TemplateAIReportProvider(AIProviderConfig.deepseek())
-    if provider_name == "gpt":
-        return TemplateAIReportProvider(AIProviderConfig.gpt())
+        config = AIProviderConfig.deepseek()
+    elif provider_name == "gpt":
+        config = AIProviderConfig.gpt()
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only deepseek and gpt providers are supported",
+        )
 
-    raise HTTPException(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        detail="Only deepseek and gpt providers are supported",
-    )
+    if os.getenv("AI_REPORT_MODE") == "live":
+        return OpenAICompatibleAIReportProvider(config)
+
+    return TemplateAIReportProvider(config)
 
 
 def _prediction(payload: MatchPredictionPayload) -> MatchPrediction:

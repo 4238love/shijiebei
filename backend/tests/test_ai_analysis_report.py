@@ -1,5 +1,6 @@
 from app.ai_reports import (
     AIProviderConfig,
+    OpenAICompatibleAIReportProvider,
     generate_ai_analysis_report,
 )
 from app.cross_source_validation import ConflictStatus, ValidatedFact
@@ -26,6 +27,43 @@ class MutatingProvider(FakeProvider):
         payload["probabilities"]["home_win"] = 0.0
         payload["weight_version"] = "mutated"
         return "Attempted mutation."
+
+
+class FakeChatCompletionResponse:
+    def __init__(self, payload):
+        self.payload = payload
+
+    def raise_for_status(self):
+        return None
+
+    def json(self):
+        return self.payload
+
+
+class FakeChatCompletionHttpClient:
+    def __init__(self):
+        self.calls = []
+
+    def post(self, url, *, headers, json, timeout):
+        self.calls.append(
+            {
+                "url": url,
+                "headers": headers,
+                "json": json,
+                "timeout": timeout,
+            }
+        )
+        return FakeChatCompletionResponse(
+            {
+                "choices": [
+                    {
+                        "message": {
+                            "content": "Model-backed report: Brazil edge, draw risk remains."
+                        }
+                    }
+                ]
+            }
+        )
 
 
 def sample_prediction() -> MatchPrediction:
@@ -94,3 +132,33 @@ def test_deepseek_and_gpt_configs_are_separate():
     assert gpt.provider_name == "gpt"
     assert gpt.api_key_env == "OPENAI_API_KEY"
     assert deepseek.model_name != gpt.model_name
+
+
+def test_openai_compatible_provider_posts_chat_completion_payload():
+    config = AIProviderConfig(
+        provider_name="gpt",
+        model_name="gpt-test",
+        api_key_env="OPENAI_API_KEY",
+        base_url="https://api.openai.test/v1",
+    )
+    http_client = FakeChatCompletionHttpClient()
+    provider = OpenAICompatibleAIReportProvider(
+        config,
+        api_key="test-key",
+        http_client=http_client,
+    )
+
+    report = generate_ai_analysis_report(
+        prediction=sample_prediction(),
+        provider=provider,
+        validated_facts=[],
+    )
+
+    assert report.content == "Model-backed report: Brazil edge, draw risk remains."
+    call = http_client.calls[0]
+    assert call["url"] == "https://api.openai.test/v1/chat/completions"
+    assert call["headers"]["Authorization"] == "Bearer test-key"
+    assert call["json"]["model"] == "gpt-test"
+    assert call["json"]["messages"][0]["role"] == "system"
+    assert "Do not alter probabilities" in call["json"]["messages"][0]["content"]
+    assert "Brazil vs Croatia" in call["json"]["messages"][1]["content"]

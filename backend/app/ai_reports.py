@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
+import os
 from typing import Protocol
 
 from app.cross_source_validation import ValidatedFact
@@ -47,6 +49,51 @@ class AIAnalysisReport:
     model_name: str
     content: str
     input_summary: dict
+
+
+class OpenAICompatibleAIReportProvider:
+    def __init__(
+        self,
+        config: AIProviderConfig,
+        *,
+        api_key: str | None = None,
+        http_client=None,
+        timeout_seconds: int = 45,
+    ):
+        self.provider_name = config.provider_name
+        self.model_name = config.model_name
+        self.base_url = config.base_url.rstrip("/")
+        self.api_key = api_key or os.getenv(config.api_key_env)
+        self.http_client = http_client
+        self.timeout_seconds = timeout_seconds
+
+    def generate_report(self, payload: dict) -> str:
+        if not self.api_key:
+            raise RuntimeError(f"Missing API key for {self.provider_name}")
+
+        response = self._http_client().post(
+            f"{self.base_url}/chat/completions",
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": self.model_name,
+                "messages": _chat_completion_messages(payload),
+                "temperature": 0.2,
+            },
+            timeout=self.timeout_seconds,
+        )
+        response.raise_for_status()
+        return _chat_completion_content(response.json())
+
+    def _http_client(self):
+        if self.http_client is not None:
+            return self.http_client
+
+        import httpx
+
+        return httpx
 
 
 def generate_ai_analysis_report(
@@ -102,3 +149,38 @@ def _report_payload(
             for fact in validated_facts
         ],
     }
+
+
+def _chat_completion_messages(payload: dict) -> list[dict[str, str]]:
+    return [
+        {
+            "role": "system",
+            "content": (
+                "You write concise football prediction analysis for operators. "
+                "Do not alter probabilities, expected goals, active weights, or source facts. "
+                "Explain the statistical result, cite key source evidence, call out conflicts, "
+                "and keep recommendations review-only."
+            ),
+        },
+        {
+            "role": "user",
+            "content": json.dumps(payload, ensure_ascii=False, sort_keys=True),
+        },
+    ]
+
+
+def _chat_completion_content(response_payload: dict) -> str:
+    choices = response_payload.get("choices", [])
+    if not choices:
+        return ""
+
+    content = choices[0].get("message", {}).get("content", "")
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "".join(
+            str(part.get("text", ""))
+            for part in content
+            if isinstance(part, dict)
+        )
+    return str(content)
