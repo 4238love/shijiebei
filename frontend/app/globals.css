@@ -203,11 +203,42 @@ h2 {
   gap: 9px;
 }
 
-.prediction-form label:nth-child(3),
-.prediction-form button,
+.prediction-form .fixture-picker,
+.prediction-form .full-width-field,
+.prediction-form .submit-button,
 .prediction-scope,
 .ai-provider-field {
   grid-column: 1 / -1;
+}
+
+.fixture-picker {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(117, 240, 178, 0.2);
+  border-radius: 20px;
+  background:
+    linear-gradient(135deg, rgba(117, 240, 178, 0.08), transparent 58%),
+    rgba(255, 255, 255, 0.035);
+}
+
+.fixture-picker-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.fixture-picker-note,
+.fixture-picker-error {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.fixture-picker-error {
+  color: #ffd5cc;
 }
 
 .prediction-form fieldset {
@@ -244,7 +275,7 @@ h2 {
   box-shadow: 0 0 0 4px rgba(231, 217, 111, 0.08);
 }
 
-.prediction-form button {
+.prediction-form .submit-button {
   min-height: 52px;
   border: 1px solid rgba(231, 217, 111, 0.56);
   border-radius: 999px;
@@ -260,7 +291,24 @@ h2 {
   box-shadow: 0 18px 42px rgba(117, 240, 178, 0.16);
 }
 
-.prediction-form button:disabled {
+.prediction-form .secondary-button {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid rgba(117, 240, 178, 0.34);
+  border-radius: 999px;
+  color: var(--ok);
+  background: rgba(117, 240, 178, 0.08);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.prediction-form .submit-button:disabled,
+.prediction-form .secondary-button:disabled {
   cursor: wait;
   filter: grayscale(0.6);
   opacity: 0.58;

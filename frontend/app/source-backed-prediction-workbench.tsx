@@ -1,12 +1,12 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   canonicalTeamName,
-  localizeTeamNamesInText,
   matchLabel,
   teamLabel,
 } from "./team-labels";
+import { localizeReportText } from "./report-text";
 
 type Scoreline = {
   home_goals: number;
@@ -65,6 +65,20 @@ type SourceBackedPredictionPayload = {
   ai_report?: AIReportPayload | null;
 };
 
+type TomorrowMatchPayload = {
+  source_name: string;
+  event_id: string;
+  home_team: string;
+  away_team: string;
+  kickoff_at: string | null;
+};
+
+type TomorrowMatchesPayload = {
+  target_date: string;
+  match_count: number;
+  matches: TomorrowMatchPayload[];
+};
+
 type SourceCategoryOption = {
   value: string;
   label: string;
@@ -93,6 +107,13 @@ type Props = {
 export function SourceBackedPredictionWorkbench({ backendReady }: Props) {
   const [homeTeam, setHomeTeam] = useState(teamLabel("Brazil"));
   const [awayTeam, setAwayTeam] = useState(teamLabel("Croatia"));
+  const [tomorrowMatches, setTomorrowMatches] = useState<TomorrowMatchPayload[]>(
+    [],
+  );
+  const [tomorrowTargetDate, setTomorrowTargetDate] = useState<string | null>(null);
+  const [selectedMatchKey, setSelectedMatchKey] = useState("manual");
+  const [isLoadingMatches, setIsLoadingMatches] = useState(backendReady);
+  const [matchError, setMatchError] = useState<string | null>(null);
   const [category, setCategory] = useState("");
   const [simulationCount, setSimulationCount] = useState(1000);
   const [generateAIReport, setGenerateAIReport] = useState(false);
@@ -108,6 +129,67 @@ export function SourceBackedPredictionWorkbench({ backendReady }: Props) {
       "自定义数据源集合",
     [category],
   );
+
+  useEffect(() => {
+    if (!backendReady) {
+      return;
+    }
+
+    void loadTomorrowMatches();
+  }, [backendReady]);
+
+  async function loadTomorrowMatches() {
+    setMatchError(null);
+    setIsLoadingMatches(true);
+
+    try {
+      const response = await fetch("/api/sources/tomorrow-matches", {
+        cache: "no-store",
+      });
+      if (!response.ok) {
+        const message = await response.text();
+        throw new Error(message || `明日赛程加载失败，HTTP 状态码 ${response.status}`);
+      }
+
+      const payload = (await response.json()) as TomorrowMatchesPayload;
+      setTomorrowMatches(payload.matches);
+      setTomorrowTargetDate(payload.target_date);
+
+      if (payload.matches.length) {
+        selectTomorrowMatch("0", payload.matches);
+      } else {
+        setSelectedMatchKey("manual");
+      }
+    } catch (caughtError) {
+      setMatchError(
+        caughtError instanceof Error ? caughtError.message : "明日赛程加载失败。",
+      );
+      setTomorrowMatches([]);
+      setTomorrowTargetDate(null);
+      setSelectedMatchKey("manual");
+    } finally {
+      setIsLoadingMatches(false);
+    }
+  }
+
+  function selectTomorrowMatch(
+    key: string,
+    matches: TomorrowMatchPayload[] = tomorrowMatches,
+  ) {
+    setSelectedMatchKey(key);
+    if (key === "manual") {
+      return;
+    }
+
+    const selectedIndex = Number(key);
+    const match = matches[selectedIndex];
+    if (!match) {
+      return;
+    }
+
+    setHomeTeam(teamLabel(match.home_team));
+    setAwayTeam(teamLabel(match.away_team));
+  }
 
   async function runPrediction(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -178,11 +260,55 @@ export function SourceBackedPredictionWorkbench({ backendReady }: Props) {
       </div>
 
       <form className="prediction-form" onSubmit={runPrediction}>
+        <div className="fixture-picker">
+          <label>
+            <span className="label">明日比赛</span>
+            <select
+              disabled={isLoadingMatches}
+              value={selectedMatchKey}
+              onChange={(event) => selectTomorrowMatch(event.target.value)}
+            >
+              <option value="manual">
+                {isLoadingMatches
+                  ? "正在抓取明日赛程..."
+                  : tomorrowMatches.length
+                    ? "手动输入球队"
+                    : "未抓到明日比赛，可手动输入"}
+              </option>
+              {tomorrowMatches.map((match, index) => (
+                <option key={matchKey(match, index)} value={String(index)}>
+                  {fixtureOptionLabel(match)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="fixture-picker-actions">
+            <p className="fixture-picker-note">
+              {tomorrowTargetDate
+                ? `目标日期 ${tomorrowTargetDate}，已加载 ${tomorrowMatches.length} 场。`
+                : isLoadingMatches
+                  ? "正在从赛程数据源抓取第二天出战队伍。"
+                  : "会从赛程数据源抓取第二天出战队伍。"}
+            </p>
+            <button
+              className="secondary-button"
+              disabled={!backendReady || isLoadingMatches}
+              onClick={() => void loadTomorrowMatches()}
+              type="button"
+            >
+              {isLoadingMatches ? "加载中" : "刷新赛程"}
+            </button>
+          </div>
+          {matchError ? <p className="fixture-picker-error">{matchError}</p> : null}
+        </div>
         <label>
           <span className="label">主队</span>
           <input
             value={homeTeam}
-            onChange={(event) => setHomeTeam(event.target.value)}
+            onChange={(event) => {
+              setSelectedMatchKey("manual");
+              setHomeTeam(event.target.value);
+            }}
             required
           />
         </label>
@@ -190,11 +316,14 @@ export function SourceBackedPredictionWorkbench({ backendReady }: Props) {
           <span className="label">客队</span>
           <input
             value={awayTeam}
-            onChange={(event) => setAwayTeam(event.target.value)}
+            onChange={(event) => {
+              setSelectedMatchKey("manual");
+              setAwayTeam(event.target.value);
+            }}
             required
           />
         </label>
-        <label>
+        <label className="full-width-field">
           <span className="label">数据源范围</span>
           <select
             value={category}
@@ -251,7 +380,11 @@ export function SourceBackedPredictionWorkbench({ backendReady }: Props) {
             ))}
           </div>
         </fieldset>
-        <button disabled={!backendReady || isRunning} type="submit">
+        <button
+          className="submit-button"
+          disabled={!backendReady || isRunning}
+          type="submit"
+        >
           {isRunning ? "正在抓取并预测" : "运行数据源预测"}
         </button>
         <p className="summary compact prediction-scope">
@@ -340,7 +473,7 @@ export function SourceBackedPredictionWorkbench({ backendReady }: Props) {
                 </span>
               </div>
               <p className="summary compact">
-                {localizeTeamNamesInText(prediction.ai_report.content)}
+                {localizeReportText(prediction.ai_report.content)}
               </p>
             </div>
           ) : null}
@@ -376,4 +509,33 @@ export function SourceBackedPredictionWorkbench({ backendReady }: Props) {
 
 function formatPercent(value: number) {
   return `${(value * 100).toFixed(1)}%`;
+}
+
+function matchKey(match: TomorrowMatchPayload, index: number) {
+  return `${index}-${match.home_team}-${match.away_team}-${match.kickoff_at ?? ""}`;
+}
+
+function fixtureOptionLabel(match: TomorrowMatchPayload) {
+  return `${formatKickoff(match.kickoff_at)} · ${matchLabel(
+    match.home_team,
+    match.away_team,
+  )}`;
+}
+
+function formatKickoff(value: string | null) {
+  if (!value) {
+    return "时间待定";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleString("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }

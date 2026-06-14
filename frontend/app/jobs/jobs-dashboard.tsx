@@ -83,7 +83,9 @@ export function JobsDashboard({ initialJobs }: Props) {
         </h2>
         <p className="summary compact">
           {payload.scheduler.enabled
-            ? `${payload.scheduler.job_count} 个计划任务：${payload.scheduler.job_ids.join(", ")}`
+            ? `${payload.scheduler.job_count} 个计划任务：${payload.scheduler.job_ids
+                .map((jobId) => jobLabel(jobId, jobId))
+                .join("、")}`
             : "启动后端前设置 ENABLE_SCHEDULER=true，才能按目标间隔运行流水线任务。"}
         </p>
       </section>
@@ -136,7 +138,7 @@ export function JobsDashboard({ initialJobs }: Props) {
                 <span className="source-pill source-pill-live">
                   {statusLabel(run.status)}
                 </span>
-                <h2>{run.job_id}</h2>
+                <h2>{jobLabel(run.job_id, run.job_id)}</h2>
                 <p>{formatDate(run.finished_at)}</p>
                 <p>{formatSummary(run.summary)}</p>
                 {run.error ? <p>{run.error}</p> : null}
@@ -183,6 +185,7 @@ function jobLabel(jobId: string, fallback: string) {
   const labels: Record<string, string> = {
     "create-source-backed-prediction": "创建基于数据源的预测",
     "ingest-sources": "抓取已配置数据源",
+    "predict-tomorrow-world-cup-matches": "预测明日全部世界杯比赛",
     "validate-sources": "校验数据源事实",
   };
   return labels[jobId] ?? fallback;
@@ -199,17 +202,25 @@ function summaryKeyLabel(key: string) {
     ingested_source_count: "已抓取数据源",
     match_count: "比赛数",
     normalized_fact_count: "归一化事实",
+    prediction_count: "预测场次",
     prediction_id: "预测 ID",
+    prediction_source_count: "预测数据源",
+    predictions: "预测明细",
+    schedule_source_count: "赛程数据源",
     simulation_count: "模拟次数",
     snapshot_count: "快照数",
     source_category: "数据源分类",
     source_count: "数据源数",
+    target_date: "目标日期",
     validated_fact_count: "已验证事实",
   };
   return labels[key] ?? key.replaceAll("_", " ");
 }
 
 function summaryValueLabel(key: string, value: unknown) {
+  if (key === "predictions") {
+    return predictionsSummaryLabel(value);
+  }
   if (key === "source_category" && typeof value === "string") {
     return categoryLabel(value);
   }
@@ -230,4 +241,59 @@ function categoryLabel(category: string) {
     team_form: "球队状态",
   };
   return labels[category] ?? category.replaceAll("_", " ");
+}
+
+function predictionsSummaryLabel(value: unknown) {
+  if (!Array.isArray(value)) {
+    return String(value);
+  }
+  if (!value.length) {
+    return "无";
+  }
+
+  return value
+    .map((item) => {
+      if (!isRecord(item)) {
+        return String(item);
+      }
+
+      const homeTeam = stringValue(item.home_team);
+      const awayTeam = stringValue(item.away_team);
+      const scoreline = stringValue(item.predicted_scoreline);
+      const winner = stringValue(item.predicted_winner);
+      const probability = probabilityLabel(item.top_scoreline_probability);
+      const confidence = stringValue(item.confidence_level);
+
+      return [
+        `${teamLabel(homeTeam)} ${scoreline} ${teamLabel(awayTeam)}`,
+        winnerLabel(winner),
+        probability ? `比分概率 ${probability}` : null,
+        confidence ? `置信度 ${confidence}` : null,
+      ]
+        .filter(Boolean)
+        .join("，");
+    })
+    .join("；");
+}
+
+function winnerLabel(winner: string) {
+  if (!winner) {
+    return "胜负未定";
+  }
+  if (winner === "Draw") {
+    return "平局";
+  }
+  return `${teamLabel(winner)}胜`;
+}
+
+function probabilityLabel(value: unknown) {
+  return typeof value === "number" ? `${(value * 100).toFixed(1)}%` : null;
+}
+
+function stringValue(value: unknown) {
+  return typeof value === "string" ? value : "";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }

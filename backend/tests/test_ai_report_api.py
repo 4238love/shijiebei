@@ -51,8 +51,10 @@ def test_create_ai_report_for_gpt_without_mutating_prediction():
     assert body["id"]
     assert body["provider_name"] == "gpt"
     assert body["model_name"].startswith("gpt-")
-    assert "Brazil vs Croatia" in body["content"]
+    assert "AI 复核报告" in body["content"]
+    assert "统计模型最强结果" in body["content"]
     assert body["input_summary"]["probabilities"]["home_win"] == 0.58
+    assert body["input_summary"]["language"] == "zh-CN"
     assert body["input_summary"]["conflict_statuses"][0]["status"] == "conflicting"
 
 

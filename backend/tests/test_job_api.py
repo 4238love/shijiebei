@@ -115,6 +115,7 @@ def test_jobs_endpoint_lists_registered_pipeline_jobs():
         "ingest-sources",
         "validate-sources",
         "create-source-backed-prediction",
+        "predict-tomorrow-world-cup-matches",
     ]
     assert body["scheduler"] == {
         "enabled": False,
@@ -184,11 +185,12 @@ def test_jobs_endpoint_reports_running_scheduler_when_enabled():
     scheduler = response.json()["scheduler"]
     assert scheduler["enabled"] is True
     assert scheduler["running"] is True
-    assert scheduler["job_count"] == 3
+    assert scheduler["job_count"] == 4
     assert scheduler["job_ids"] == [
         "ingest-sources",
         "validate-sources",
         "create-source-backed-prediction",
+        "predict-tomorrow-world-cup-matches",
     ]
     assert fake_scheduler.shutdown_wait is False
 
@@ -212,6 +214,91 @@ def test_prediction_job_creates_saved_prediction_record():
     assert detail["source_evidence"][0]["source_name"] == "ranking-source"
     assert detail["validated_facts"]
     assert detail["validated_facts"][0]["fact_type"] == "team_ranking_position"
+
+
+def test_tomorrow_world_cup_job_predicts_all_target_date_matches(monkeypatch):
+    monkeypatch.setenv("JOB_TARGET_DATE", "2026-06-15")
+    monkeypatch.setenv("JOB_SIMULATION_COUNT", "250")
+
+    tmp_path = workspace_tmp()
+    config_path = tmp_path / "sources.json"
+    schedule_url = "https://data-source.example/schedule.html"
+    ranking_url = "https://data-source.example/ranking.html"
+    config_path.write_text(
+        """
+        {
+          "schedule": [
+            {
+              "name": "fixture-source",
+              "url": "https://data-source.example/schedule.html",
+              "priority": 1,
+              "adapter": "schema_org_schedule"
+            }
+          ],
+          "ranking": [
+            {
+              "name": "ranking-source",
+              "url": "https://data-source.example/ranking.html",
+              "priority": 1,
+              "adapter": "webpage"
+            }
+          ]
+        }
+        """,
+        encoding="utf-8",
+    )
+    app = create_app(
+        source_config_path=config_path,
+        source_snapshot_dir=tmp_path / "snapshots",
+        source_http_client=UrlMappedHttpClient(
+            {
+                schedule_url: b"""
+                <html><script type="application/ld+json">
+                {"@graph":[
+                  {"@type":"SportsEvent","sport":"Football","name":"Brazil - Morocco","startDate":"2026-06-15T19:00:00+00:00"},
+                  {"@type":"SportsEvent","sport":"Football","name":"Germany vs Curacao","startDate":"2026-06-15T22:00:00+00:00"},
+                  {"@type":"SportsEvent","sport":"Football","name":"Argentina vs France","startDate":"2026-06-16T19:00:00+00:00"}
+                ]}
+                </script></html>
+                """,
+                ranking_url: (
+                    b"<html><body>"
+                    b"1 Brazil 2082 10 Germany 1920 "
+                    b"14 Morocco 1800 88 Curacao 1300 "
+                    b"2 Argentina 2050 3 France 2025"
+                    b"</body></html>"
+                ),
+            }
+        ),
+    )
+    client = TestClient(app)
+
+    run_response = client.post("/jobs/predict-tomorrow-world-cup-matches/run")
+
+    assert run_response.status_code == 200
+    run = run_response.json()
+    assert run["status"] == "succeeded"
+    assert run["summary"]["target_date"] == "2026-06-15"
+    assert run["summary"]["match_count"] == 2
+    assert run["summary"]["prediction_count"] == 2
+    assert [
+        (prediction["home_team"], prediction["away_team"])
+        for prediction in run["summary"]["predictions"]
+    ] == [("Brazil", "Morocco"), ("Germany", "Curacao")]
+
+    first_prediction = run["summary"]["predictions"][0]
+    assert first_prediction["predicted_winner"] in {"Brazil", "Morocco", "Draw"}
+    assert first_prediction["predicted_scoreline"].count("-") == 1
+    assert first_prediction["prediction_id"]
+
+    detail_response = client.get(
+        f"/predictions/{first_prediction['prediction_id']}/record"
+    )
+    assert detail_response.status_code == 200
+    detail = detail_response.json()
+    assert detail["prediction"]["home_team"] == "Brazil"
+    assert detail["prediction"]["away_team"] == "Morocco"
+    assert detail["source_summary"]["ingested_source_count"] == 2
 
 
 def test_running_unknown_job_returns_404():

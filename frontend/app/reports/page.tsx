@@ -1,7 +1,7 @@
 import {
-  localizeTeamNamesInText,
   matchTextLabel,
 } from "../team-labels";
+import { localizeReportText } from "../report-text";
 
 type AIReport = {
   id: string;
@@ -91,7 +91,7 @@ export default async function ReportsPage() {
                 {report.provider_name} / {report.model_name}
               </p>
               <h2>{matchTextLabel(report.input_summary.match)}</h2>
-              <p>{localizeTeamNamesInText(report.content)}</p>
+              <p>{localizeReportText(report.content)}</p>
               <div className="factor-grid">
                 <span>
                   <b>主胜</b>

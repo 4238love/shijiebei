@@ -1,8 +1,9 @@
 import {
-  localizeTeamNamesInText,
   matchLabel,
   teamLabel,
 } from "../../team-labels";
+import { localizeReportText } from "../../report-text";
+import { sourceNameLabel } from "../../source-labels";
 
 type Scoreline = {
   home_goals: number;
@@ -277,7 +278,7 @@ export default async function PredictionDetailPage({ params }: PageProps) {
             </span>
           </div>
           <p className="summary compact">
-            {localizeTeamNamesInText(record.ai_report.content)}
+            {localizeReportText(record.ai_report.content)}
           </p>
           <p className="summary compact">
             报告 ID <code>{record.ai_report.id}</code>。该报告仅用于复核说明，
@@ -330,7 +331,7 @@ export default async function PredictionDetailPage({ params }: PageProps) {
                 <span className="source-pill source-pill-live">
                   {statusLabel(evidence.status)}
                 </span>
-                <h2>{evidence.source_name}</h2>
+                <h2>{sourceNameLabel(evidence.source_name)}</h2>
                 <p>
                   {categoryLabel(evidence.category)} / 事实 {evidence.fact_count} / 比赛{" "}
                   {evidence.match_count}

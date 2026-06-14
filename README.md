@@ -198,7 +198,8 @@ Pipeline jobs can be inspected and run from the browser:
 - Backend jobs route: `GET /jobs`
 - Backend run route: `POST /jobs/{job_id}/run`
 - Frontend jobs route: `/jobs`
-- Registered jobs: `ingest-sources`, `validate-sources`, `create-source-backed-prediction`
+- Registered jobs: `ingest-sources`, `validate-sources`,
+  `create-source-backed-prediction`, `predict-tomorrow-world-cup-matches`
 
 Manual runs are always available. Background interval scheduling is opt-in:
 
@@ -209,6 +210,13 @@ docker compose up -d --build backend
 
 When enabled, `/jobs` reports scheduler state and schedules each registered job
 on its configured target interval.
+
+`predict-tomorrow-world-cup-matches` runs every 1440 minutes when scheduling is
+enabled. It fetches configured `schedule` sources, filters the next day's World
+Cup fixtures, fetches the non-schedule prediction sources once, and saves one
+prediction record per match with the most likely scoreline and winner/draw
+summary. Set `JOB_TARGET_DATE=YYYY-MM-DD` to force a specific fixture date for
+manual validation, and `JOB_SIMULATION_COUNT` to control Monte Carlo volume.
 
 FIFA, Transfermarkt, OddsPortal, OddsChecker, BBC, and Elo pages are configured
 as crawl targets. Dedicated parsers should be added as separate adapters when a

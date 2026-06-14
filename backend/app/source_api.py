@@ -12,6 +12,12 @@ from app.cross_source_validation import (
     ValidatedFact,
 )
 from app.data_sources import ScheduleMatch, SourceIngestionResult, SourceSnapshot
+from app.schedule_fixtures import (
+    ScheduledFixture,
+    fixtures_from_results,
+    matches_for_date,
+    target_prediction_date,
+)
 from app.source_config import SourceDefinition, load_source_catalog_config
 from app.source_ingestion import ingest_source_safely
 from app.source_snapshot_repository import (
@@ -97,6 +103,20 @@ class SourceSnapshotsResponse(BaseModel):
     snapshots: list[SourceSnapshotMetadataResponse]
 
 
+class TomorrowMatchResponse(BaseModel):
+    source_name: str
+    event_id: str
+    home_team: str
+    away_team: str
+    kickoff_at: str | None
+
+
+class TomorrowMatchesResponse(BaseModel):
+    target_date: str
+    match_count: int
+    matches: list[TomorrowMatchResponse]
+
+
 class ValidatedFactResponse(BaseModel):
     fact_type: str
     entity_key: str
@@ -148,6 +168,52 @@ async def ingest_sources(payload: SourceIngestRequest, request: Request):
     _record_snapshot_metadata(request, results)
     return SourceIngestResponse(
         results=[_ingestion_result_response(result) for result in results]
+    )
+
+
+@router.get("/tomorrow-matches", response_model=TomorrowMatchesResponse)
+async def list_tomorrow_matches(
+    request: Request,
+    target_date: str | None = Query(default=None),
+):
+    config = load_source_catalog_config(_source_config_path(request))
+    definitions = _matching_sources(
+        config.sources,
+        category="schedule",
+        source_name=None,
+    )
+    if not definitions:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No schedule data sources found",
+        )
+
+    try:
+        target = target_prediction_date(target_date)
+    except ValueError as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="target_date must be YYYY-MM-DD",
+        ) from error
+
+    results = [
+        ingest_source_safely(
+            definition,
+            snapshot_dir=_source_snapshot_dir(request),
+            http_client=getattr(request.app.state, "source_http_client", None),
+        )
+        for definition in definitions
+    ]
+    _record_snapshot_metadata(request, results)
+    matches = matches_for_date(
+        fixtures_from_results(results),
+        target_date=target,
+    )
+
+    return TomorrowMatchesResponse(
+        target_date=target.isoformat(),
+        match_count=len(matches),
+        matches=[_tomorrow_match_response(match) for match in matches],
     )
 
 
@@ -310,6 +376,16 @@ def _match_response(match: ScheduleMatch) -> ScheduleMatchResponse:
         status=match.status,
         home_score=match.home_score,
         away_score=match.away_score,
+    )
+
+
+def _tomorrow_match_response(match: ScheduledFixture) -> TomorrowMatchResponse:
+    return TomorrowMatchResponse(
+        source_name=match.source_name,
+        event_id=match.event_id,
+        home_team=match.home_team,
+        away_team=match.away_team,
+        kickoff_at=match.kickoff_at,
     )
 
 

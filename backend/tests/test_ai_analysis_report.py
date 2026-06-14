@@ -160,5 +160,7 @@ def test_openai_compatible_provider_posts_chat_completion_payload():
     assert call["headers"]["Authorization"] == "Bearer test-key"
     assert call["json"]["model"] == "gpt-test"
     assert call["json"]["messages"][0]["role"] == "system"
-    assert "Do not alter probabilities" in call["json"]["messages"][0]["content"]
+    assert "必须只使用简体中文输出" in call["json"]["messages"][0]["content"]
+    assert "不要改写概率" in call["json"]["messages"][0]["content"]
+    assert "简体中文 AI 报告" in call["json"]["messages"][1]["content"]
     assert "Brazil vs Croatia" in call["json"]["messages"][1]["content"]

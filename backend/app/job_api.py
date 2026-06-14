@@ -9,10 +9,16 @@ from fastapi import APIRouter, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 
 from app.cross_source_validation import CrossSourceValidator, NormalizedFact, ValidatedFact
+from app.data_sources import SourceIngestionResult
 from app.job_repository import JobRunRecord, JobRunRepository
 from app.job_runner import InMemoryJobRunner, JobDefinition, JobState
 from app.prediction_dataset_builder import build_prediction_dataset_from_validated_facts
 from app.prediction_engine import run_match_prediction
+from app.schedule_fixtures import (
+    fixtures_from_results,
+    matches_for_date,
+    target_prediction_date,
+)
 from app.source_config import SourceDefinition, load_source_catalog_config
 from app.source_ingestion import ingest_source_safely
 from app.source_snapshot_repository import SourceSnapshotMetadata
@@ -103,6 +109,12 @@ def create_job_runner(
                 interval_minutes=60,
                 handler=lambda: _create_source_backed_prediction_job(app),
             ),
+            JobDefinition(
+                job_id="predict-tomorrow-world-cup-matches",
+                label="Predict tomorrow World Cup matches",
+                interval_minutes=1440,
+                handler=lambda: _predict_tomorrow_world_cup_matches_job(app),
+            ),
         ],
         run_repository=job_run_repository,
     )
@@ -180,6 +192,93 @@ def _create_source_backed_prediction_job(app) -> dict:
     _record_snapshot_metadata(app, results)
     facts = [fact for result in results for fact in result.facts]
     validated_facts = _validate_facts(definitions, facts)
+    prediction_id, record, _ = _save_source_backed_prediction_record(
+        app,
+        home_team=home_team,
+        away_team=away_team,
+        simulation_count=simulation_count,
+        results=results,
+        facts=facts,
+        validated_facts=validated_facts,
+    )
+
+    return {
+        "prediction_id": prediction_id,
+        "home_team": home_team,
+        "away_team": away_team,
+        "source_category": category,
+        "simulation_count": simulation_count,
+        **record["source_summary"],
+    }
+
+
+def _predict_tomorrow_world_cup_matches_job(app) -> dict:
+    target_date = target_prediction_date(os.getenv("JOB_TARGET_DATE"))
+    simulation_count = int(os.getenv("JOB_SIMULATION_COUNT", "1000"))
+
+    schedule_definitions = _load_source_definitions(app, category="schedule")
+    if not schedule_definitions:
+        raise RuntimeError("No schedule data sources found for tomorrow prediction job")
+
+    schedule_results = _ingest_definitions(app, schedule_definitions)
+    _record_snapshot_metadata(app, schedule_results)
+    target_fixtures = matches_for_date(
+        fixtures_from_results(schedule_results),
+        target_date=target_date,
+    )
+
+    prediction_definitions = _prediction_source_definitions(app)
+    if target_fixtures and not prediction_definitions:
+        raise RuntimeError("No prediction data sources found for tomorrow prediction job")
+
+    prediction_results = (
+        _ingest_definitions(app, prediction_definitions) if target_fixtures else []
+    )
+    _record_snapshot_metadata(app, prediction_results)
+    prediction_facts = [fact for result in prediction_results for fact in result.facts]
+    validated_facts = _validate_facts(prediction_definitions, prediction_facts)
+    evidence_results = [*schedule_results, *prediction_results]
+
+    predictions = []
+    for fixture in target_fixtures:
+        prediction_id, _, prediction = _save_source_backed_prediction_record(
+            app,
+            home_team=fixture.home_team,
+            away_team=fixture.away_team,
+            simulation_count=simulation_count,
+            results=evidence_results,
+            facts=prediction_facts,
+            validated_facts=validated_facts,
+        )
+        predictions.append(
+            _prediction_outcome_summary(
+                prediction_id=prediction_id,
+                prediction=prediction,
+                kickoff_at=fixture.kickoff_at,
+            )
+        )
+
+    return {
+        "target_date": target_date.isoformat(),
+        "match_count": len(target_fixtures),
+        "prediction_count": len(predictions),
+        "simulation_count": simulation_count,
+        "schedule_source_count": len(schedule_results),
+        "prediction_source_count": len(prediction_results),
+        "predictions": predictions,
+    }
+
+
+def _save_source_backed_prediction_record(
+    app,
+    *,
+    home_team: str,
+    away_team: str,
+    simulation_count: int,
+    results: list[SourceIngestionResult],
+    facts: list[NormalizedFact],
+    validated_facts: list[ValidatedFact],
+):
     dataset = build_prediction_dataset_from_validated_facts(
         home_team=home_team,
         away_team=away_team,
@@ -221,25 +320,76 @@ def _create_source_backed_prediction_job(app) -> dict:
             "home_advantage": dataset.home_advantage,
             "conflict_count": dataset.conflict_count,
         },
-        "source_summary": {
-            "ingested_source_count": len(results),
-            "snapshot_count": sum(1 for result in results if result.snapshot),
-            "normalized_fact_count": len(facts),
-            "validated_fact_count": len(validated_facts),
-            "conflict_count": dataset.conflict_count,
-        },
+        "source_summary": _prediction_source_summary(
+            results=results,
+            facts=facts,
+            validated_facts=validated_facts,
+            conflict_count=dataset.conflict_count,
+        ),
         "source_evidence": [_source_evidence(result) for result in results],
         "validated_facts": [_validated_fact_payload(fact) for fact in validated_facts],
     }
     prediction_id = app.state.prediction_repository.save(record)
 
+    return prediction_id, record, prediction
+
+
+def _prediction_source_summary(
+    *,
+    results: list[SourceIngestionResult],
+    facts: list[NormalizedFact],
+    validated_facts: list[ValidatedFact],
+    conflict_count: int,
+) -> dict:
+    return {
+        "ingested_source_count": len(results),
+        "snapshot_count": sum(1 for result in results if result.snapshot),
+        "normalized_fact_count": len(facts),
+        "validated_fact_count": len(validated_facts),
+        "conflict_count": conflict_count,
+    }
+
+
+def _prediction_source_definitions(app) -> list[SourceDefinition]:
+    return [
+        definition
+        for definition in _load_source_definitions(app)
+        if definition.category.value != "schedule"
+    ]
+
+
+def _prediction_outcome_summary(
+    *,
+    prediction_id: str,
+    prediction,
+    kickoff_at: str | None,
+) -> dict:
+    top_scoreline = prediction.top_scorelines[0]
+    if top_scoreline.home_goals > top_scoreline.away_goals:
+        predicted_outcome = "home_win"
+        predicted_winner = prediction.home_team
+    elif top_scoreline.away_goals > top_scoreline.home_goals:
+        predicted_outcome = "away_win"
+        predicted_winner = prediction.away_team
+    else:
+        predicted_outcome = "draw"
+        predicted_winner = "Draw"
+
     return {
         "prediction_id": prediction_id,
-        "home_team": home_team,
-        "away_team": away_team,
-        "source_category": category,
-        "simulation_count": simulation_count,
-        **record["source_summary"],
+        "home_team": prediction.home_team,
+        "away_team": prediction.away_team,
+        "kickoff_at": kickoff_at,
+        "predicted_winner": predicted_winner,
+        "predicted_outcome": predicted_outcome,
+        "predicted_scoreline": (
+            f"{top_scoreline.home_goals}-{top_scoreline.away_goals}"
+        ),
+        "home_goals": top_scoreline.home_goals,
+        "away_goals": top_scoreline.away_goals,
+        "confidence_level": prediction.confidence_level,
+        "top_scoreline_probability": top_scoreline.probability,
+        "probabilities": prediction.probabilities,
     }
 
 

@@ -63,11 +63,14 @@ class TemplateAIReportProvider:
     def generate_report(self, payload: dict) -> str:
         probabilities = payload["probabilities"]
         strongest_outcome = max(probabilities.items(), key=lambda item: item[1])[0]
+        strongest_outcome_label = _outcome_label(strongest_outcome)
         return (
-            f"{payload['match']} report from {self.provider_name}/{self.model_name}: "
-            f"strongest statistical outcome is {strongest_outcome}; "
-            f"confidence level {payload['confidence_level']}; "
-            f"{len(payload['conflict_statuses'])} validated source facts reviewed."
+            f"{payload['match']} 的 AI 复核报告"
+            f"（{self.provider_name}/{self.model_name}）："
+            f"统计模型最强结果为{strongest_outcome_label}；"
+            f"置信等级为 {payload['confidence_level']}；"
+            f"已复核 {len(payload['conflict_statuses'])} 条数据源事实。"
+            "本报告只解释预测依据，不会改写概率、权重或数据源事实。"
         )
 
 
@@ -170,6 +173,11 @@ def _report_payload(
             for scoreline in prediction.top_scorelines
         ],
         "confidence_level": prediction.confidence_level,
+        "language": "zh-CN",
+        "language_instruction": (
+            "所有面向用户的报告内容必须使用简体中文。"
+            "球队名、胜平负、证据说明、冲突说明和建议都应中文表达。"
+        ),
         "conflict_statuses": [
             {
                 "fact_type": fact.fact_type,
@@ -192,15 +200,24 @@ def _chat_completion_messages(payload: dict) -> list[dict[str, str]]:
         {
             "role": "system",
             "content": (
-                "You write concise football prediction analysis for operators. "
-                "Do not alter probabilities, expected goals, active weights, or source facts. "
-                "Explain the statistical result, cite key source evidence, call out conflicts, "
-                "and keep recommendations review-only."
+                "你是世界杯预测系统的中文分析员。"
+                "必须只使用简体中文输出，不能夹杂英文段落或英文小标题；"
+                "常见球队名也尽量使用中文译名。"
+                "不要改写概率、预期进球、当前权重或数据源事实。"
+                "请解释统计结果，引用关键数据源证据，指出冲突，"
+                "并保持所有建议仅用于人工复核。"
+                "输出控制在 4 到 6 个短段落，标题也使用中文。"
             ),
         },
         {
             "role": "user",
-            "content": json.dumps(payload, ensure_ascii=False, sort_keys=True),
+            "content": (
+                "请根据以下结构化数据生成简体中文 AI 报告。"
+                "报告中不要出现英文标题如 Match Analysis、Statistical Summary、"
+                "Key Source Evidence、Confidence Level。"
+                "结构化数据：\n"
+                f"{json.dumps(payload, ensure_ascii=False, sort_keys=True)}"
+            ),
         },
     ]
 
@@ -220,3 +237,12 @@ def _chat_completion_content(response_payload: dict) -> str:
             if isinstance(part, dict)
         )
     return str(content)
+
+
+def _outcome_label(outcome: str) -> str:
+    labels = {
+        "away_win": "客胜",
+        "draw": "平局",
+        "home_win": "主胜",
+    }
+    return labels.get(outcome, outcome)

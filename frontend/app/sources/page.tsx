@@ -1,4 +1,5 @@
 import { SourceOperations } from "./source-operations";
+import { sourceAdapterLabel, sourceNameLabel } from "../source-labels";
 
 type SourceItem = {
   category: string;
@@ -163,7 +164,7 @@ export default async function SourcesPage() {
                     <span className="source-pill source-pill-live">
                       {statusLabel(snapshot.status)}
                     </span>
-                    <h2>{snapshot.source_name}</h2>
+                    <h2>{sourceNameLabel(snapshot.source_name)}</h2>
                     <p>
                       {categoryLabel(snapshot.category)} / 事实 {snapshot.fact_count} / 比赛{" "}
                       {snapshot.match_count}
@@ -202,9 +203,10 @@ export default async function SourcesPage() {
                         >
                           {adapterLabel(source.adapter)}
                         </span>
-                        <h2>{source.name}</h2>
+                        <h2>{sourceNameLabel(source.name)}</h2>
                         <p>
-                          优先级 {source.priority} / 适配器 {source.adapter}
+                          优先级 {source.priority} / 适配器{" "}
+                          {sourceAdapterLabel(source.adapter)}
                         </p>
                         <p>目标地址：{source.url}</p>
                       </a>

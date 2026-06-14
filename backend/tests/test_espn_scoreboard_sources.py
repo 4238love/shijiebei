@@ -2240,6 +2240,57 @@ def test_sources_api_ingests_espn_scoreboard_source():
     assert body["results"][0]["matches"][0]["away_team"] == "Canada"
 
 
+def test_sources_api_lists_target_date_schedule_matches_for_team_selector():
+    tmp_path = workspace_tmp()
+    config_path = tmp_path / "sources.json"
+    schedule_url = "https://data-source.example/schedule.html"
+    config_path.write_text(
+        json.dumps(
+            {
+                "schedule": [
+                    {
+                        "name": "fixture-source",
+                        "url": schedule_url,
+                        "priority": 1,
+                        "adapter": "schema_org_schedule",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    client = TestClient(
+        create_app(
+            source_config_path=config_path,
+            source_snapshot_dir=tmp_path / "snapshots",
+            source_http_client=UrlMappedHttpClient(
+                {
+                    schedule_url: b"""
+                    <html><script type="application/ld+json">
+                    {"@graph":[
+                      {"@type":"SportsEvent","sport":"Football","name":"Brazil - Morocco","startDate":"2026-06-15T19:00:00+00:00"},
+                      {"@type":"SportsEvent","sport":"Football","name":"Germany vs Curacao","startDate":"2026-06-15T22:00:00+00:00"},
+                      {"@type":"SportsEvent","sport":"Football","name":"Argentina vs France","startDate":"2026-06-16T19:00:00+00:00"}
+                    ]}
+                    </script></html>
+                    """
+                }
+            ),
+        )
+    )
+
+    response = client.get("/sources/tomorrow-matches?target_date=2026-06-15")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["target_date"] == "2026-06-15"
+    assert body["match_count"] == 2
+    assert [
+        (match["home_team"], match["away_team"])
+        for match in body["matches"]
+    ] == [("Brazil", "Morocco"), ("Germany", "Curacao")]
+
+
 def test_sources_api_records_snapshot_metadata():
     tmp_path = workspace_tmp()
     config_path = tmp_path / "sources.json"

@@ -246,7 +246,8 @@ def test_create_match_prediction_from_sources_can_generate_ai_report():
     body = response.json()
     assert body["ai_report"]["id"]
     assert body["ai_report"]["provider_name"] == "gpt"
-    assert "Brazil vs Croatia" in body["ai_report"]["content"]
+    assert "AI 复核报告" in body["ai_report"]["content"]
+    assert "统计模型最强结果" in body["ai_report"]["content"]
     assert (
         body["ai_report"]["input_summary"]["probabilities"]
         == body["prediction"]["probabilities"]
