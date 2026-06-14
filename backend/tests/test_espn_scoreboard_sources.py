@@ -5,6 +5,7 @@ from uuid import uuid4
 from fastapi.testclient import TestClient
 
 from app.data_sources import (
+    BetExplorerOddsDataSourceAdapter,
     EspnScoreboardDataSourceAdapter,
     EspnTeamRosterDiscoveryDataSourceAdapter,
     EspnTeamScheduleDiscoveryDataSourceAdapter,
@@ -1321,6 +1322,64 @@ def test_webpage_adapter_extracts_betexplorer_match_row_one_x_two_odds():
     ]
 
 
+def test_betexplorer_adapter_extracts_match_row_one_x_two_odds():
+    tmp_path = workspace_tmp()
+    result = BetExplorerOddsDataSourceAdapter(
+        source_name="betexplorer-world-cup",
+        url="https://www.betexplorer.com/football/world/world-cup/",
+        category=SourceCategory.ODDS,
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=FakeHttpClient(
+            b"""
+            <html><body>
+              <li class="showHide table-main__tournamentLiContent" data-event-id="b5JayTEd">
+                <a href="/football/world/world-championship-2026/brazil-morocco/b5JayTEd/">
+                  <div class="table-main__participantHome"><p>Brazil</p></div>
+                  <div class="table-main__participantAway"><p>Morocco</p></div>
+                </a>
+                <div class="table-main__oddsLi oddsColumn">
+                  <p data-odd="1.68"></p>
+                  <p data-odd="3.73"></p>
+                  <p data-odd="5.52"></p>
+                </div>
+              </li>
+            </body></html>
+            """
+        ),
+    ).ingest_odds()
+
+    assert result.status == "ingested"
+    assert result.item_count == 3
+    assert [
+        (fact.fact_type, fact.entity_key, fact.value) for fact in result.facts
+    ] == [
+        ("decimal_odds", "Brazil", 1.68),
+        ("match_draw_decimal_odds", "Brazil vs Morocco", 3.73),
+        ("decimal_odds", "Morocco", 5.52),
+    ]
+
+
+def test_betexplorer_adapter_keeps_market_price_fallback():
+    tmp_path = workspace_tmp()
+    result = BetExplorerOddsDataSourceAdapter(
+        source_name="betexplorer-world-cup",
+        url="https://www.betexplorer.com/football/world/world-cup/",
+        category=SourceCategory.ODDS,
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=FakeHttpClient(
+            b"<html><body><span>1.68</span><span>3.75</span><span>5.21</span></body></html>"
+        ),
+    ).ingest_odds()
+
+    assert [
+        (fact.fact_type, fact.entity_key, fact.value) for fact in result.facts
+    ] == [
+        ("market_decimal_odds", "market_price_1", 1.68),
+        ("market_decimal_odds", "market_price_2", 3.75),
+        ("market_decimal_odds", "market_price_3", 5.21),
+    ]
+
+
 def test_oddschecker_adapter_extracts_match_card_one_x_two_odds():
     tmp_path = workspace_tmp()
     result = OddsCheckerOddsDataSourceAdapter(
@@ -1751,6 +1810,29 @@ def test_source_ingestion_routes_oddschecker_odds_adapter():
     assert result.status == "ingested"
     assert result.facts[0].fact_type == "decimal_odds"
     assert result.facts[0].source_name == "oddschecker-world-cup"
+
+
+def test_source_ingestion_routes_betexplorer_odds_adapter():
+    tmp_path = workspace_tmp()
+    url = "https://www.betexplorer.com/football/world/world-cup/"
+
+    result = ingest_source(
+        SourceDefinition(
+            category=SourceCategory.ODDS,
+            name="betexplorer-world-cup",
+            url=url,
+            priority=2,
+            adapter="betexplorer_odds",
+        ),
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=FakeHttpClient(
+            b"<html><body>Brazil v Croatia 1.80 3.40 4.20</body></html>"
+        ),
+    )
+
+    assert result.status == "ingested"
+    assert result.facts[0].fact_type == "decimal_odds"
+    assert result.facts[0].source_name == "betexplorer-world-cup"
 
 
 def test_source_ingestion_routes_transfermarkt_squad_adapter():

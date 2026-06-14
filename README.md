@@ -135,9 +135,10 @@ The report stores the Prediction Engine output and validated facts as
 `decimal_odds` facts now influence the Prediction Dataset when both teams have
 market prices: lower decimal odds increase the team's market strength factor,
 raise attack index, and reduce defensive weakness before Monte Carlo simulation.
-BetExplorer-style static match rows with `data-odd` 1X2 prices are parsed into
-home/draw/away facts, so captured marketplace HTML can produce team-scoped odds
-instead of only loose market price samples.
+BetExplorer-style static match rows with `data-odd` 1X2 prices are parsed by
+the dedicated `betexplorer_odds` adapter into home/draw/away facts, so captured
+marketplace HTML can produce team-scoped odds instead of only loose market price
+samples.
 OddsChecker is configured as an additional odds comparison crawl target using
 the dedicated `oddschecker_odds` adapter, including decimal and fractional
 price parsing for 1X2 match cards.
@@ -193,4 +194,5 @@ FIFA, Transfermarkt, OddsPortal, OddsChecker, BBC, and Elo pages are configured
 as crawl targets. Dedicated parsers should be added as separate adapters when a
 source needs more than the generic webpage parser; current dedicated adapters
 cover ESPN discovery, Sports Mole injuries, Transfermarkt injuries, and World
-Football Elo, plus OddsChecker match-card odds and Transfermarkt squad rows.
+Football Elo, plus BetExplorer/OddsChecker match-card odds and Transfermarkt
+squad rows.

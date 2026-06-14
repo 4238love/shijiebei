@@ -103,7 +103,7 @@
       "name": "betexplorer-world-cup",
       "url": "https://www.betexplorer.com/football/world/world-cup/",
       "priority": 2,
-      "adapter": "webpage",
+      "adapter": "betexplorer_odds",
       "notes": "Secondary market comparison source with static decimal odds fragments."
     },
     {

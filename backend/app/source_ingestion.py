@@ -4,6 +4,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from app.data_sources import (
+    BetExplorerOddsDataSourceAdapter,
     EspnScoreboardDataSourceAdapter,
     EspnTeamRosterDiscoveryDataSourceAdapter,
     EspnTeamScheduleDiscoveryDataSourceAdapter,
@@ -87,6 +88,16 @@ def ingest_source(
 
     if definition.adapter == "oddschecker_odds":
         result = OddsCheckerOddsDataSourceAdapter(
+            source_name=definition.name,
+            url=definition.url,
+            category=definition.category,
+            snapshot_dir=snapshot_dir,
+            http_client=http_client,
+        ).ingest_odds()
+        return replace(result, category=definition.category)
+
+    if definition.adapter == "betexplorer_odds":
+        result = BetExplorerOddsDataSourceAdapter(
             source_name=definition.name,
             url=definition.url,
             category=definition.category,

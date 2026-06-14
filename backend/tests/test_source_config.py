@@ -58,6 +58,17 @@ def test_local_source_config_uses_dedicated_oddschecker_odds_adapter():
     assert oddschecker_sources[0].adapter == "oddschecker_odds"
 
 
+def test_local_source_config_uses_dedicated_betexplorer_odds_adapter():
+    config = load_source_catalog_config(Path("config/sources.local.json"))
+
+    betexplorer_sources = [
+        source for source in config.sources if source.name == "betexplorer-world-cup"
+    ]
+
+    assert len(betexplorer_sources) == 1
+    assert betexplorer_sources[0].adapter == "betexplorer_odds"
+
+
 def test_local_source_config_uses_dedicated_transfermarkt_squad_adapter():
     config = load_source_catalog_config(Path("config/sources.local.json"))
 
