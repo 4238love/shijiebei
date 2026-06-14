@@ -414,8 +414,54 @@ def test_webpage_adapter_extracts_odds_news_sentiment_and_player_facts():
     assert odds_result.facts[0].value == 1.85
     assert news_result.facts[0].fact_type == "news_sentiment"
     assert news_result.facts[0].value == "negative"
+    assert ("team_news_sentiment", "Brazil", "negative") in {
+        (fact.fact_type, fact.entity_key, fact.value) for fact in news_result.facts
+    }
+    assert ("team_news_sentiment", "Morocco", "positive") in {
+        (fact.fact_type, fact.entity_key, fact.value) for fact in news_result.facts
+    }
     assert player_result.facts[0].fact_type == "player_presence"
     assert player_result.facts[0].entity_key == "Neymar"
+
+
+def test_webpage_adapter_extracts_team_news_sentiment_from_team_segments():
+    tmp_path = workspace_tmp()
+    result = HttpWebpageDataSourceAdapter(
+        source_name="bbc-world-cup-football",
+        url="https://www.bbc.com/sport/football/world-cup",
+        category=SourceCategory.NEWS_SENTIMENT,
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=FakeHttpClient(
+            b"<html><body>Brazil: confident boost. Croatia: injury concern pressure.</body></html>"
+        ),
+    ).ingest_snapshot()
+
+    assert ("team_news_sentiment", "Brazil", "positive") in {
+        (fact.fact_type, fact.entity_key, fact.value) for fact in result.facts
+    }
+    assert ("team_news_sentiment", "Croatia", "negative") in {
+        (fact.fact_type, fact.entity_key, fact.value) for fact in result.facts
+    }
+
+
+def test_webpage_adapter_ignores_lowercase_news_colon_fragments_as_team_sentiment():
+    tmp_path = workspace_tmp()
+    result = HttpWebpageDataSourceAdapter(
+        source_name="bbc-world-cup-football",
+        url="https://www.bbc.com/sport/football/world-cup",
+        category=SourceCategory.NEWS_SENTIMENT,
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=FakeHttpClient(
+            b"<html><body>debate the long-asked question: injury pressure. Brazil: confident boost.</body></html>"
+        ),
+    ).ingest_snapshot()
+
+    assert ("team_news_sentiment", "Brazil", "positive") in {
+        (fact.fact_type, fact.entity_key, fact.value) for fact in result.facts
+    }
+    assert "debate the long-asked question" not in {
+        fact.entity_key for fact in result.facts if fact.fact_type == "team_news_sentiment"
+    }
 
 
 def test_webpage_adapter_extracts_team_listed_player_count_from_squad_text():

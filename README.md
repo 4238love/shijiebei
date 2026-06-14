@@ -61,9 +61,12 @@ The frontend Sources page includes an operations console for running snapshot-ba
 Webpage sources now return category-aware normalized facts when the static HTML contains extractable signals:
 
 - `injury_availability`
+- `team_unavailable_player_count`
 - `decimal_odds`
 - `news_sentiment`
+- `team_news_sentiment`
 - `player_presence`
+- `team_listed_player_count`
 
 World Football Elo uses a dedicated adapter that snapshots `World.tsv` plus
 `en.teams.tsv`, maps country codes to team names, and emits `team_rating` /
@@ -100,6 +103,12 @@ raise attack index, and reduce defensive weakness before Monte Carlo simulation.
 Team-scoped injury segments such as `Brazil: Neymar doubtful, Vinicius Junior
 suspended` emit `team_unavailable_player_count` facts. Those facts reduce the
 team's attack index and increase defensive weakness before simulation.
+
+Team-scoped news segments such as `Brazil: confident boost. Croatia: injury
+concern pressure.` and inline clauses such as `Brazil injury concern but Morocco
+confident` emit `team_news_sentiment` facts. Positive sentiment applies a small
+attack boost and defensive weakness reduction; negative sentiment applies the
+inverse.
 
 Player squad pages emit `player_presence` plus `team_listed_player_count` facts
 when a team can be inferred from text or source name. When both teams have squad

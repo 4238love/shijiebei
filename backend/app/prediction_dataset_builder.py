@@ -73,6 +73,11 @@ def _team_model(
         fact_type="team_unavailable_player_count",
         entity_key=team_name,
     )
+    news_sentiments = _string_values(
+        facts,
+        fact_type="team_news_sentiment",
+        entity_key=team_name,
+    )
     results = _string_values(facts, fact_type="team_match_result", entity_key=team_name)
 
     attack_index = 1.0
@@ -98,6 +103,10 @@ def _team_model(
         )
         attack_index *= attack_penalty
         defense_weakness *= defense_penalty
+    if news_sentiments:
+        attack_factor, defense_factor = _news_sentiment_factors(news_sentiments)
+        attack_index *= attack_factor
+        defense_weakness *= defense_factor
     if squad_depth_factor != 1.0:
         attack_index *= squad_depth_factor
         defense_weakness *= _clamp(1 / squad_depth_factor, 0.94, 1.06)
@@ -175,6 +184,20 @@ def _availability_factors(unavailable_count: float) -> tuple[float, float]:
     return (
         _clamp(1 - unavailable_count * 0.04, 0.84, 1.0),
         _clamp(1 + unavailable_count * 0.03, 1.0, 1.12),
+    )
+
+
+def _news_sentiment_factors(sentiments: list[str]) -> tuple[float, float]:
+    score = 0
+    for sentiment in sentiments:
+        if sentiment == "positive":
+            score += 1
+        elif sentiment == "negative":
+            score -= 1
+    average_score = score / max(1, len(sentiments))
+    return (
+        _clamp(1 + average_score * 0.04, 0.96, 1.04),
+        _clamp(1 - average_score * 0.03, 0.97, 1.03),
     )
 
 

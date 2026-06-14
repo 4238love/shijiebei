@@ -33,6 +33,67 @@ FIRST_WAVE_SOURCE_CATEGORIES = (
     SourceCategory.PLAYER,
 )
 
+NEWS_NEGATIVE_TERMS = (
+    "injury",
+    "injured",
+    "doubtful",
+    "crisis",
+    "concern",
+    "pressure",
+    "suspended",
+    "loss",
+)
+NEWS_POSITIVE_TERMS = (
+    "boost",
+    "return",
+    "fit",
+    "confident",
+    "strong",
+    "available",
+    "win",
+)
+NEWS_TEAM_NAMES = (
+    "Argentina",
+    "Australia",
+    "Belgium",
+    "Brazil",
+    "Cameroon",
+    "Canada",
+    "Chile",
+    "Colombia",
+    "Costa Rica",
+    "Croatia",
+    "Denmark",
+    "Ecuador",
+    "Egypt",
+    "England",
+    "France",
+    "Germany",
+    "Ghana",
+    "Iran",
+    "Italy",
+    "Japan",
+    "Mexico",
+    "Morocco",
+    "Netherlands",
+    "Nigeria",
+    "Norway",
+    "Poland",
+    "Portugal",
+    "Qatar",
+    "Saudi Arabia",
+    "Senegal",
+    "Serbia",
+    "South Korea",
+    "Spain",
+    "Switzerland",
+    "Tunisia",
+    "United States",
+    "Uruguay",
+    "USA",
+    "Wales",
+)
+
 
 @dataclass(frozen=True)
 class SourceSnapshot:
@@ -840,33 +901,7 @@ def _match_line_odds_facts(text: str, *, source_name: str) -> list[NormalizedFac
 
 
 def _news_sentiment_facts(text: str, *, source_name: str) -> list[NormalizedFact]:
-    lower_text = text.lower()
-    negative_terms = (
-        "injury",
-        "injured",
-        "doubtful",
-        "crisis",
-        "concern",
-        "pressure",
-        "suspended",
-        "loss",
-    )
-    positive_terms = (
-        "boost",
-        "return",
-        "fit",
-        "confident",
-        "strong",
-        "available",
-        "win",
-    )
-    negative_count = sum(lower_text.count(term) for term in negative_terms)
-    positive_count = sum(lower_text.count(term) for term in positive_terms)
-    sentiment = "neutral"
-    if negative_count > positive_count:
-        sentiment = "negative"
-    elif positive_count > negative_count:
-        sentiment = "positive"
+    sentiment, _, _ = _sentiment_from_text(text)
 
     return [
         NormalizedFact(
@@ -874,8 +909,108 @@ def _news_sentiment_facts(text: str, *, source_name: str) -> list[NormalizedFact
             entity_key=source_name,
             value=sentiment,
             source_name=source_name,
-        )
+        ),
+        *_team_news_sentiment_facts(text, source_name=source_name),
     ]
+
+
+def _team_news_sentiment_facts(
+    text: str,
+    *,
+    source_name: str,
+) -> list[NormalizedFact]:
+    segment_pattern = re.compile(
+        r"\b([A-Z][A-Za-z' .-]{1,32})\s*:\s*([^.;]+)",
+    )
+    facts: list[NormalizedFact] = []
+    seen_teams: set[str] = set()
+    for segment in segment_pattern.finditer(text):
+        team_name = _clean_entity_name(segment.group(1))
+        if not team_name or team_name in seen_teams:
+            continue
+
+        _append_team_news_sentiment_fact(
+            facts,
+            seen_teams=seen_teams,
+            team_name=team_name,
+            text=segment.group(2),
+            source_name=source_name,
+        )
+
+    for clause in _news_sentiment_clauses(text):
+        for team_name in _known_team_names_in_text(clause):
+            _append_team_news_sentiment_fact(
+                facts,
+                seen_teams=seen_teams,
+                team_name=team_name,
+                text=clause,
+                source_name=source_name,
+            )
+
+    return facts
+
+
+def _append_team_news_sentiment_fact(
+    facts: list[NormalizedFact],
+    *,
+    seen_teams: set[str],
+    team_name: str,
+    text: str,
+    source_name: str,
+) -> None:
+    if team_name in seen_teams or not _is_known_news_team_name(team_name):
+        return
+
+    sentiment, positive_count, negative_count = _sentiment_from_text(text)
+    if positive_count == 0 and negative_count == 0:
+        return
+
+    seen_teams.add(team_name)
+    facts.append(
+        NormalizedFact(
+            fact_type="team_news_sentiment",
+            entity_key=team_name,
+            value=sentiment,
+            source_name=source_name,
+        )
+    )
+
+
+def _news_sentiment_clauses(text: str) -> list[str]:
+    return [
+        clause.strip()
+        for clause in re.split(
+            r"[.;!?]|\bbut\b|\bwhile\b|\bwhereas\b",
+            text,
+            flags=re.IGNORECASE,
+        )
+        if clause.strip()
+    ]
+
+
+def _known_team_names_in_text(text: str) -> list[str]:
+    return [
+        team_name
+        for team_name in sorted(NEWS_TEAM_NAMES, key=len, reverse=True)
+        if re.search(rf"\b{re.escape(team_name)}\b", text, flags=re.IGNORECASE)
+    ]
+
+
+def _is_known_news_team_name(team_name: str) -> bool:
+    return team_name.lower() in {team.lower() for team in NEWS_TEAM_NAMES}
+
+
+def _sentiment_from_text(text: str) -> tuple[str, int, int]:
+    lower_text = text.lower()
+    negative_count = sum(lower_text.count(term) for term in NEWS_NEGATIVE_TERMS)
+    positive_count = sum(lower_text.count(term) for term in NEWS_POSITIVE_TERMS)
+    sentiment = "neutral"
+    if negative_count > positive_count:
+        sentiment = "negative"
+    elif positive_count > negative_count:
+        sentiment = "positive"
+
+    return (sentiment, positive_count, negative_count)
 
 
 def _player_facts(text: str, *, source_name: str) -> list[NormalizedFact]:

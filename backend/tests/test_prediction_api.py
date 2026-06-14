@@ -365,6 +365,59 @@ def test_create_match_prediction_from_player_sources_uses_squad_depth():
     ]
 
 
+def test_create_match_prediction_from_news_sources_uses_team_sentiment():
+    tmp_path = workspace_tmp()
+    config_path = tmp_path / "sources.json"
+    news_url = "https://data-source.example/news.html"
+    config_path.write_text(
+        """
+        {
+          "news_sentiment": [
+            {
+              "name": "news-source",
+              "url": "https://data-source.example/news.html",
+              "priority": 1,
+              "adapter": "webpage"
+            }
+          ]
+        }
+        """,
+        encoding="utf-8",
+    )
+    client = TestClient(
+        create_app(
+            source_config_path=config_path,
+            source_snapshot_dir=tmp_path / "snapshots",
+            source_http_client=UrlMappedHttpClient(
+                {
+                    news_url: b"<html><body>Brazil: confident boost. Croatia: injury concern pressure.</body></html>",
+                }
+            ),
+        )
+    )
+
+    response = client.post(
+        "/predictions/from-sources",
+        json={
+            "home_team": "Brazil",
+            "away_team": "Croatia",
+            "category": "news_sentiment",
+            "simulation_count": 1_000,
+            "seed": 20260614,
+        },
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["source_summary"]["validated_fact_count"] == 3
+    assert body["dataset"]["home"]["attack_index"] > body["dataset"]["away"][
+        "attack_index"
+    ]
+    assert body["dataset"]["home"]["defense_weakness"] < body["dataset"]["away"][
+        "defense_weakness"
+    ]
+
+
 def test_list_predictions_includes_source_summary_for_source_backed_runs():
     tmp_path = workspace_tmp()
     config_path = tmp_path / "sources.json"
