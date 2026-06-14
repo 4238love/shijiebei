@@ -8,6 +8,7 @@ from app.data_sources import (
     HttpWebpageDataSourceAdapter,
     SourceIngestionResult,
     SourceIngestionStatus,
+    WorldFootballEloDataSourceAdapter,
 )
 from app.source_config import SourceDefinition
 
@@ -36,6 +37,16 @@ def ingest_source(
             snapshot_dir=snapshot_dir,
             http_client=http_client,
         ).ingest_snapshot()
+        return replace(result, category=definition.category)
+
+    if definition.adapter == "world_football_elo":
+        result = WorldFootballEloDataSourceAdapter(
+            source_name=definition.name,
+            url=definition.url,
+            category=definition.category,
+            snapshot_dir=snapshot_dir,
+            http_client=http_client,
+        ).ingest_rankings()
         return replace(result, category=definition.category)
 
     return SourceIngestionResult(

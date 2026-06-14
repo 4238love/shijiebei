@@ -65,6 +65,10 @@ Webpage sources now return category-aware normalized facts when the static HTML 
 - `news_sentiment`
 - `player_presence`
 
+World Football Elo uses a dedicated adapter that snapshots `World.tsv` plus
+`en.teams.tsv`, maps country codes to team names, and emits `team_rating` /
+`team_ranking_position` facts.
+
 Run a category validation pass to ingest all matching sources and cross-check facts by source priority:
 
 ```powershell

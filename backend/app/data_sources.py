@@ -7,6 +7,7 @@ import json
 from enum import StrEnum
 from pathlib import Path
 import re
+from urllib.parse import urljoin
 
 from app.cross_source_validation import NormalizedFact
 from app.prediction_engine import PredictionDataset, TeamModel
@@ -251,6 +252,89 @@ class HttpWebpageDataSourceAdapter:
         content_hash = sha256(content).hexdigest()
         self.snapshot_dir.mkdir(parents=True, exist_ok=True)
         snapshot_path = self.snapshot_dir / f"{_safe_name(self.source_name)}-{content_hash[:12]}.html"
+        snapshot_path.write_bytes(content)
+
+        return SourceSnapshot(
+            source_name=self.source_name,
+            path=snapshot_path,
+            content_hash=content_hash,
+        )
+
+    def _http_client(self):
+        if self.http_client is not None:
+            return self.http_client
+
+        import httpx
+
+        return httpx
+
+
+class WorldFootballEloDataSourceAdapter:
+    def __init__(
+        self,
+        *,
+        source_name: str,
+        url: str,
+        category: SourceCategory | None = SourceCategory.RANKING,
+        snapshot_dir: Path,
+        http_client=None,
+        timeout_seconds: int = 10,
+    ):
+        self.source_name = source_name
+        self.url = url
+        self.category = category
+        self.snapshot_dir = Path(snapshot_dir)
+        self.http_client = http_client
+        self.timeout_seconds = timeout_seconds
+
+    def ingest_rankings(self) -> SourceIngestionResult:
+        snapshot = self.fetch_snapshot()
+        payload = json.loads(snapshot.path.read_text(encoding="utf-8"))
+        team_names = _elo_team_names_from_tsv(payload["team_names_tsv"])
+        facts = tuple(
+            _elo_ranking_facts_from_world_tsv(
+                payload["ratings_tsv"],
+                team_names=team_names,
+                source_name=self.source_name,
+            )
+        )
+
+        return SourceIngestionResult(
+            source_name=self.source_name,
+            category=self.category,
+            status=SourceIngestionStatus.INGESTED,
+            item_count=len(facts),
+            snapshot=snapshot,
+            facts=facts,
+            message=_webpage_ingestion_message(facts),
+        )
+
+    def fetch_snapshot(self) -> SourceSnapshot:
+        ratings_url = urljoin(self.url, "World.tsv")
+        team_names_url = urljoin(self.url, "en.teams.tsv")
+        ratings_tsv = _http_get_webpage(
+            self._http_client(),
+            ratings_url,
+            timeout_seconds=self.timeout_seconds,
+        ).content.decode("utf-8", errors="ignore")
+        team_names_tsv = _http_get_webpage(
+            self._http_client(),
+            team_names_url,
+            timeout_seconds=self.timeout_seconds,
+        ).content.decode("utf-8", errors="ignore")
+        payload = {
+            "source_url": self.url,
+            "ratings_url": ratings_url,
+            "team_names_url": team_names_url,
+            "ratings_tsv": ratings_tsv,
+            "team_names_tsv": team_names_tsv,
+        }
+        content = json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")
+        content_hash = sha256(content).hexdigest()
+        self.snapshot_dir.mkdir(parents=True, exist_ok=True)
+        snapshot_path = (
+            self.snapshot_dir / f"{_safe_name(self.source_name)}-{content_hash[:12]}.json"
+        )
         snapshot_path.write_bytes(content)
 
         return SourceSnapshot(
@@ -751,7 +835,7 @@ def _ranking_facts(text: str, *, source_name: str) -> list[NormalizedFact]:
     seen: set[str] = set()
     for match in pattern.finditer(text):
         team_name = _clean_entity_name(match.group(2))
-        if not team_name or team_name in seen:
+        if not team_name or _looks_like_calendar_label(team_name) or team_name in seen:
             continue
         seen.add(team_name)
         facts.extend(
@@ -774,8 +858,87 @@ def _ranking_facts(text: str, *, source_name: str) -> list[NormalizedFact]:
     return facts
 
 
+def _looks_like_calendar_label(value: str) -> bool:
+    return value.lower() in {
+        "january",
+        "february",
+        "march",
+        "april",
+        "may",
+        "june",
+        "july",
+        "august",
+        "september",
+        "october",
+        "november",
+        "december",
+    }
+
+
+def _elo_team_names_from_tsv(content: str) -> dict[str, str]:
+    team_names: dict[str, str] = {}
+    for line in content.splitlines():
+        fields = line.split("\t")
+        if len(fields) < 2:
+            continue
+        code = fields[0].strip()
+        name = _clean_entity_name(fields[1])
+        if code and name:
+            team_names[code] = name
+
+    return team_names
+
+
+def _elo_ranking_facts_from_world_tsv(
+    content: str,
+    *,
+    team_names: dict[str, str],
+    source_name: str,
+) -> list[NormalizedFact]:
+    facts: list[NormalizedFact] = []
+    seen: set[str] = set()
+    for line in content.splitlines():
+        fields = line.split("\t")
+        if len(fields) < 4:
+            continue
+        rank = _optional_int(fields[0])
+        code = fields[2].strip()
+        rating = _optional_float(fields[3])
+        team_name = team_names.get(code, code)
+        if rank is None or rating is None or not team_name or team_name in seen:
+            continue
+        seen.add(team_name)
+        facts.extend(
+            [
+                NormalizedFact(
+                    fact_type="team_ranking_position",
+                    entity_key=team_name,
+                    value=rank,
+                    source_name=source_name,
+                ),
+                NormalizedFact(
+                    fact_type="team_rating",
+                    entity_key=team_name,
+                    value=rating,
+                    source_name=source_name,
+                ),
+            ]
+        )
+
+    return facts
+
+
 def _clean_entity_name(value: str) -> str:
     return re.sub(r"\s+", " ", value.strip(" -:,.")).strip()
+
+
+def _optional_float(value) -> float | None:
+    if value in (None, ""):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _webpage_ingestion_message(facts: tuple[NormalizedFact, ...]) -> str:

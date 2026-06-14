@@ -8,8 +8,11 @@ from app.data_sources import (
     EspnScoreboardDataSourceAdapter,
     HttpWebpageDataSourceAdapter,
     SourceCategory,
+    WorldFootballEloDataSourceAdapter,
 )
 from app.main import create_app
+from app.source_config import SourceDefinition
+from app.source_ingestion import ingest_source
 from app.source_snapshot_repository import InMemorySourceSnapshotRepository
 
 
@@ -39,8 +42,10 @@ class BrokenHttpClient:
 class UrlMappedHttpClient:
     def __init__(self, content_by_url: dict[str, bytes]):
         self.content_by_url = content_by_url
+        self.requested_urls = []
 
     def get(self, url, timeout, headers=None):
+        self.requested_urls.append(url)
         return FakeResponse(self.content_by_url[url])
 
 
@@ -495,6 +500,81 @@ def test_webpage_adapter_extracts_ranking_facts():
     assert ("team_rating", "Brazil", 2082.0) in {
         (fact.fact_type, fact.entity_key, fact.value) for fact in result.facts
     }
+
+
+def test_webpage_ranking_parser_ignores_calendar_date_fragments():
+    tmp_path = workspace_tmp()
+    result = HttpWebpageDataSourceAdapter(
+        source_name="fifa-men-ranking",
+        url="https://inside.fifa.com/fifa-world-ranking/men",
+        category=SourceCategory.RANKING,
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=FakeHttpClient(
+            b"<html><body>11 June 2026 20 July 2026 3 Brazil 2082</body></html>"
+        ),
+    ).ingest_snapshot()
+
+    assert {fact.entity_key for fact in result.facts} == {"Brazil"}
+
+
+def test_world_football_elo_adapter_extracts_team_ratings_from_tsv_files():
+    tmp_path = workspace_tmp()
+    http_client = UrlMappedHttpClient(
+        {
+            "https://www.eloratings.net/World.tsv": (
+                b"7\t7\tBR\t1978\t1\t2195\n12\t12\tHR\t1912\t4\t2015\n"
+            ),
+            "https://www.eloratings.net/en.teams.tsv": (
+                b"BR\tBrazil\nHR\tCroatia\n"
+            ),
+        }
+    )
+    result = WorldFootballEloDataSourceAdapter(
+        source_name="world-football-elo-ranking",
+        url="https://www.eloratings.net/",
+        category=SourceCategory.RANKING,
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=http_client,
+    ).ingest_rankings()
+
+    assert http_client.requested_urls == [
+        "https://www.eloratings.net/World.tsv",
+        "https://www.eloratings.net/en.teams.tsv",
+    ]
+    assert result.status == "ingested"
+    assert result.snapshot is not None
+    assert result.snapshot.path.suffix == ".json"
+    assert ("team_ranking_position", "Brazil", 7) in {
+        (fact.fact_type, fact.entity_key, fact.value) for fact in result.facts
+    }
+    assert ("team_rating", "Croatia", 1912.0) in {
+        (fact.fact_type, fact.entity_key, fact.value) for fact in result.facts
+    }
+
+
+def test_source_ingestion_routes_world_football_elo_adapter():
+    tmp_path = workspace_tmp()
+    http_client = UrlMappedHttpClient(
+        {
+            "https://www.eloratings.net/World.tsv": b"7\t7\tBR\t1978\n",
+            "https://www.eloratings.net/en.teams.tsv": b"BR\tBrazil\n",
+        }
+    )
+
+    result = ingest_source(
+        SourceDefinition(
+            category=SourceCategory.RANKING,
+            name="world-football-elo-ranking",
+            url="https://www.eloratings.net/",
+            priority=2,
+            adapter="world_football_elo",
+        ),
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=http_client,
+    )
+
+    assert result.status == "ingested"
+    assert result.facts[0].entity_key == "Brazil"
 
 
 def test_sources_api_lists_configured_source_catalog():

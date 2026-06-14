@@ -43,8 +43,8 @@
       "name": "world-football-elo-ranking",
       "url": "https://www.eloratings.net/",
       "priority": 2,
-      "adapter": "webpage",
-      "notes": "Independent Elo-style strength rating."
+      "adapter": "world_football_elo",
+      "notes": "Independent Elo-style strength rating from World.tsv and en.teams.tsv."
     }
   ],
   "injury": [
