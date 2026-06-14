@@ -7,6 +7,7 @@ import json
 from enum import StrEnum
 from pathlib import Path
 import re
+import time
 from urllib.parse import urljoin
 
 from app.cross_source_validation import NormalizedFact
@@ -266,6 +267,7 @@ class EspnScoreboardDataSourceAdapter:
 
 class EspnTeamScheduleDiscoveryDataSourceAdapter:
     max_team_schedules = 48
+    cache_ttl_seconds = 900
 
     def __init__(
         self,
@@ -314,6 +316,15 @@ class EspnTeamScheduleDiscoveryDataSourceAdapter:
         )
 
     def fetch_snapshot(self) -> SourceSnapshot:
+        cached_snapshot = _fresh_cached_snapshot(
+            source_name=self.source_name,
+            snapshot_dir=self.snapshot_dir,
+            suffix=".json",
+            max_age_seconds=self.cache_ttl_seconds,
+        )
+        if cached_snapshot is not None:
+            return cached_snapshot
+
         team_index_response = _http_get_webpage(
             self._http_client(),
             self.url,
@@ -383,6 +394,7 @@ class EspnTeamScheduleDiscoveryDataSourceAdapter:
 
 class EspnTeamRosterDiscoveryDataSourceAdapter:
     max_team_rosters = 48
+    cache_ttl_seconds = 900
 
     def __init__(
         self,
@@ -422,6 +434,15 @@ class EspnTeamRosterDiscoveryDataSourceAdapter:
         )
 
     def fetch_snapshot(self) -> SourceSnapshot:
+        cached_snapshot = _fresh_cached_snapshot(
+            source_name=self.source_name,
+            snapshot_dir=self.snapshot_dir,
+            suffix=".json",
+            max_age_seconds=self.cache_ttl_seconds,
+        )
+        if cached_snapshot is not None:
+            return cached_snapshot
+
         team_index_response = _http_get_webpage(
             self._http_client(),
             self.url,
@@ -762,6 +783,39 @@ def _team_model(source_data: dict, team_name: str) -> TeamModel:
 
 def _safe_name(value: str) -> str:
     return re.sub(r"[^a-zA-Z0-9_-]+", "-", value).strip("-").lower()
+
+
+def _fresh_cached_snapshot(
+    *,
+    source_name: str,
+    snapshot_dir: Path,
+    suffix: str,
+    max_age_seconds: int,
+) -> SourceSnapshot | None:
+    if max_age_seconds <= 0:
+        return None
+    snapshot_dir = Path(snapshot_dir)
+    if not snapshot_dir.exists():
+        return None
+
+    candidates = [
+        path
+        for path in snapshot_dir.glob(f"{_safe_name(source_name)}-*{suffix}")
+        if path.is_file()
+    ]
+    if not candidates:
+        return None
+
+    latest_path = max(candidates, key=lambda path: path.stat().st_mtime)
+    if time.time() - latest_path.stat().st_mtime > max_age_seconds:
+        return None
+
+    content = latest_path.read_bytes()
+    return SourceSnapshot(
+        source_name=source_name,
+        path=latest_path,
+        content_hash=sha256(content).hexdigest(),
+    )
 
 
 def _schedule_matches_from_espn_scoreboard(

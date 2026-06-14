@@ -561,6 +561,77 @@ def test_espn_team_schedule_discovery_fetches_team_schedules_from_team_index():
     }
 
 
+def test_espn_team_schedule_discovery_reuses_fresh_snapshot_cache():
+    tmp_path = workspace_tmp()
+    teams_url = "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/teams"
+    schedule_url = "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/teams/205/schedule"
+    http_client = UrlMappedHttpClient(
+        {
+            teams_url: json.dumps(
+                {
+                    "sports": [
+                        {
+                            "leagues": [
+                                {
+                                    "teams": [
+                                        {"team": {"id": "205", "displayName": "Brazil"}}
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ).encode(),
+            schedule_url: json.dumps(
+                {
+                    "events": [
+                        {
+                            "id": "760419",
+                            "date": "2026-06-13T22:00Z",
+                            "competitions": [
+                                {
+                                    "status": {"type": {"description": "Full Time"}},
+                                    "competitors": [
+                                        {
+                                            "homeAway": "home",
+                                            "team": {"displayName": "Brazil"},
+                                            "score": {"displayValue": "1"},
+                                        },
+                                        {
+                                            "homeAway": "away",
+                                            "team": {"displayName": "Morocco"},
+                                            "score": {"displayValue": "1"},
+                                        },
+                                    ],
+                                }
+                            ],
+                        }
+                    ]
+                }
+            ).encode(),
+        }
+    )
+    snapshot_dir = tmp_path / "snapshots"
+    first = EspnTeamScheduleDiscoveryDataSourceAdapter(
+        source_name="espn-world-cup-team-schedules",
+        url=teams_url,
+        category=SourceCategory.TEAM_FORM,
+        snapshot_dir=snapshot_dir,
+        http_client=http_client,
+    ).ingest_team_form()
+
+    second = EspnTeamScheduleDiscoveryDataSourceAdapter(
+        source_name="espn-world-cup-team-schedules",
+        url=teams_url,
+        category=SourceCategory.TEAM_FORM,
+        snapshot_dir=snapshot_dir,
+        http_client=BrokenHttpClient(),
+    ).ingest_team_form()
+
+    assert second.snapshot == first.snapshot
+    assert second.facts == first.facts
+
+
 def test_webpage_schedule_adapter_extracts_schema_org_sports_events():
     tmp_path = workspace_tmp()
     result = HttpWebpageDataSourceAdapter(
@@ -958,6 +1029,57 @@ def test_espn_team_roster_discovery_fetches_rosters_from_team_index():
     assert ("team_listed_player_count", "Morocco", 1) in {
         (fact.fact_type, fact.entity_key, fact.value) for fact in result.facts
     }
+
+
+def test_espn_team_roster_discovery_reuses_fresh_snapshot_cache():
+    tmp_path = workspace_tmp()
+    teams_url = "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/teams"
+    roster_url = "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/teams/205/roster"
+    http_client = UrlMappedHttpClient(
+        {
+            teams_url: json.dumps(
+                {
+                    "sports": [
+                        {
+                            "leagues": [
+                                {
+                                    "teams": [
+                                        {"team": {"id": "205", "displayName": "Brazil"}}
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ).encode(),
+            roster_url: json.dumps(
+                {
+                    "athletes": [
+                        {"displayName": "Neymar"},
+                    ]
+                }
+            ).encode(),
+        }
+    )
+    snapshot_dir = tmp_path / "snapshots"
+    first = EspnTeamRosterDiscoveryDataSourceAdapter(
+        source_name="espn-world-cup-rosters",
+        url=teams_url,
+        category=SourceCategory.PLAYER,
+        snapshot_dir=snapshot_dir,
+        http_client=http_client,
+    ).ingest_players()
+
+    second = EspnTeamRosterDiscoveryDataSourceAdapter(
+        source_name="espn-world-cup-rosters",
+        url=teams_url,
+        category=SourceCategory.PLAYER,
+        snapshot_dir=snapshot_dir,
+        http_client=BrokenHttpClient(),
+    ).ingest_players()
+
+    assert second.snapshot == first.snapshot
+    assert second.facts == first.facts
 
 
 def test_webpage_adapter_retries_without_browser_headers_when_waf_page_is_returned():

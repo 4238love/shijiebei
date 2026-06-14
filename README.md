@@ -79,6 +79,8 @@ the latest completed match per team so recent-form facts do not self-conflict.
 The `espn_team_schedules` adapter can start from ESPN's team index, discover team
 IDs, fetch each team schedule, and emit the same recent-form facts without
 manually listing one URL per team.
+ESPN discovery adapters reuse a fresh JSON snapshot for 15 minutes so repeated
+validation/prediction runs do not re-fetch every team endpoint.
 
 Schedule webpage sources can parse Schema.org `SportsEvent` JSON-LD blocks into
 `fixture_kickoff` facts. `config/sources.local.json` uses this for an
@@ -137,6 +139,8 @@ counts, the Prediction Dataset applies a small squad-depth adjustment.
 The `espn_team_rosters` adapter can start from ESPN's team index, discover team
 IDs, fetch each roster JSON endpoint, and emit player-level facts without
 manually listing one squad page per team.
+Delete the matching file under `.scratch/source-snapshots/` when an operator
+needs to force an immediate ESPN discovery refresh.
 
 Saved prediction records can be reviewed with their source-backed evidence:
 
