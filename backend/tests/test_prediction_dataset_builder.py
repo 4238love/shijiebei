@@ -61,3 +61,17 @@ def test_build_prediction_dataset_turns_fact_conflicts_into_confidence_penalty()
     )
 
     assert dataset.conflict_count == 3
+
+
+def test_build_prediction_dataset_uses_decimal_odds_as_market_strength_signal():
+    dataset = build_prediction_dataset_from_validated_facts(
+        home_team="Brazil",
+        away_team="Croatia",
+        validated_facts=[
+            fact("decimal_odds", "Brazil", 1.80),
+            fact("decimal_odds", "Croatia", 4.20),
+        ],
+    )
+
+    assert dataset.home.attack_index > dataset.away.attack_index
+    assert dataset.home.defense_weakness < dataset.away.defense_weakness

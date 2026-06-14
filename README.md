@@ -93,6 +93,10 @@ The homepage includes the same flow behind a browser form. Choose home/away team
 - Browser route: `POST /api/predictions/from-sources`
 - Backend route: `POST /predictions/from-sources`
 
+`decimal_odds` facts now influence the Prediction Dataset when both teams have
+market prices: lower decimal odds increase the team's market strength factor,
+raise attack index, and reduce defensive weakness before Monte Carlo simulation.
+
 Saved prediction records can be reviewed with their source-backed evidence:
 
 - Backend history route: `GET /predictions`

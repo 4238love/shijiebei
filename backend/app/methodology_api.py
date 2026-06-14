@@ -13,6 +13,7 @@ async def methodology():
                 "Weight Version",
                 "Strategy Factors",
                 "Conflict Status",
+                "Market odds strength signal",
             ],
         },
         "monte_carlo": {
@@ -37,6 +38,12 @@ async def methodology():
                 "Match Prediction",
                 "Prediction Dataset",
                 "source summary",
+            ],
+            "dataset_signals": [
+                "team ratings",
+                "team form",
+                "market decimal odds",
+                "cross-source conflict penalties",
             ],
         },
         "backtest_run": {
