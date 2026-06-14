@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
 from app.backtesting import ActualResult, BacktestCase, run_backtest
+from app.backtest_repository import BacktestRepository
 from app.cross_source_validation import ConflictStatus
 from app.prediction_engine import MatchPrediction, ScorelineProbability
 
@@ -88,13 +89,13 @@ async def create_backtest(payload: CreateBacktestRequest, request: Request):
             for key, segment in run.segments.items()
         },
     )
-    _backtest_runs(request)[response.id] = response.model_dump()
+    _backtest_repository(request).save(response.model_dump())
     return response
 
 
 @router.get("/{backtest_id}", response_model=BacktestRunResponse)
 async def get_backtest(backtest_id: str, request: Request):
-    run = _backtest_runs(request).get(backtest_id)
+    run = _backtest_repository(request).get(backtest_id)
     if run is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -131,5 +132,5 @@ def _backtest_case(payload: BacktestCasePayload) -> BacktestCase:
     )
 
 
-def _backtest_runs(request: Request) -> dict:
-    return request.app.state.backtest_runs
+def _backtest_repository(request: Request) -> BacktestRepository:
+    return request.app.state.backtest_repository

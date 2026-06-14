@@ -22,6 +22,7 @@ services:
     environment:
       DATABASE_URL: postgresql://prediction:prediction@postgres:5432/prediction
       PREDICTION_REPOSITORY: postgres
+      BACKTEST_REPOSITORY: postgres
       HTTPS_PROXY: ${RUNTIME_HTTPS_PROXY:-http://host.docker.internal:10808}
       HTTP_PROXY: ${RUNTIME_HTTP_PROXY:-http://host.docker.internal:10808}
       NO_PROXY: ${RUNTIME_NO_PROXY:-localhost,127.0.0.1,postgres,backend,frontend,host.docker.internal}

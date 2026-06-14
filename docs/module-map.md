@@ -48,6 +48,10 @@ This map summarizes the current implementation using the project glossary.
 - `backend/app/backtesting.py`
   - Owns Backtest Run metrics: outcome hit rate, Brier Score, Log Loss, scoreline Top-N hit rate, and conflict-status segmentation.
 
+- `backend/app/backtest_repository.py`
+  - Owns the Backtest Repository seam used by `backtest_api.py`.
+  - Provides `InMemoryBacktestRepository` for tests/local seams and `PostgresBacktestRepository` for Docker deployment.
+
 - `backend/app/scheduler_jobs.py`
   - Owns scheduled job registration for ingestion, prediction creation, and result collection.
 
@@ -61,4 +65,4 @@ This map summarizes the current implementation using the project glossary.
 
 ## Known next deepening opportunity
 
-`PostgresPredictionRepository` persists the serialized Match Prediction payload. Future Backtest Runs need richer query seams for Prediction Dataset references, Weight Version references, and actual results instead of treating the payload as an opaque document.
+`PostgresPredictionRepository` and `PostgresBacktestRepository` persist serialized API payloads. Future deepening should add richer query seams for Prediction Dataset references, Weight Version references, and actual results instead of treating those records as opaque documents.

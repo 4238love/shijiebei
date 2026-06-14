@@ -17,6 +17,10 @@ Services:
 - Source catalog API: <http://localhost:8000/sources>
 - PostgreSQL: `localhost:15432`
 
+Docker Compose runs the backend with PostgreSQL-backed repositories for Match
+Predictions and Backtest Runs, so created records survive backend container
+restarts.
+
 ## Development checks
 
 ```powershell

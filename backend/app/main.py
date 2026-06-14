@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.ai_report_api import router as ai_report_router
 from app.backtest_api import router as backtest_router
+from app.backtest_repository import BacktestRepository, default_backtest_repository
 from app.health import router as health_router
 from app.methodology_api import router as methodology_router
 from app.prediction_api import router as prediction_router
@@ -23,6 +24,7 @@ def _default_source_config_path() -> Path:
 
 def create_app(
     prediction_repository: PredictionRepository | None = None,
+    backtest_repository: BacktestRepository | None = None,
     *,
     source_config_path: Path | None = None,
     source_snapshot_dir: Path | None = None,
@@ -30,10 +32,10 @@ def create_app(
 ) -> FastAPI:
     app = FastAPI(title="World Cup Prediction Tool API")
     app.state.prediction_repository = prediction_repository or default_prediction_repository()
+    app.state.backtest_repository = backtest_repository or default_backtest_repository()
     app.state.source_config_path = source_config_path or _default_source_config_path()
     app.state.source_snapshot_dir = source_snapshot_dir or Path(".scratch/source-snapshots")
     app.state.source_http_client = source_http_client
-    app.state.backtest_runs = {}
     app.state.weight_registry = create_weight_registry()
 
     app.add_middleware(
