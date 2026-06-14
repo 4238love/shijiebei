@@ -1,4 +1,5 @@
 type AIReport = {
+  id: string;
   provider_name: string;
   model_name: string;
   content: string;
@@ -80,7 +81,7 @@ export default async function ReportsPage() {
       {reports.length ? (
         <section className="report-grid">
           {reports.map((report) => (
-            <article key={`${report.provider_name}-${report.model_name}`}>
+            <article key={report.id}>
               <p className="label">
                 {report.provider_name} / {report.model_name}
               </p>

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from typing import Any
+from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
+from app.ai_report_repository import AIReportRepository
 from app.ai_reports import AIAnalysisReport, AIProviderConfig, generate_ai_analysis_report
 from app.cross_source_validation import ConflictStatus, ValidatedFact
 from app.prediction_engine import MatchPrediction, ScorelineProbability
@@ -45,6 +47,7 @@ class CreateAIReportRequest(BaseModel):
 
 
 class AIReportResponse(BaseModel):
+    id: str
     provider_name: str
     model_name: str
     content: str
@@ -68,14 +71,28 @@ class TemplateAIReportProvider:
 
 
 @router.post("", status_code=status.HTTP_201_CREATED, response_model=AIReportResponse)
-async def create_ai_report(payload: CreateAIReportRequest):
+async def create_ai_report(payload: CreateAIReportRequest, request: Request):
     provider = _provider(payload.provider_name)
     report = generate_ai_analysis_report(
         prediction=_prediction(payload.prediction),
         provider=provider,
         validated_facts=[_validated_fact(fact) for fact in payload.validated_facts],
     )
-    return _report_response(report)
+    response = _report_response(report, report_id=str(uuid4()))
+    _ai_report_repository(request).save(response.model_dump())
+    return response
+
+
+@router.get("/{report_id}", response_model=AIReportResponse)
+async def get_ai_report(report_id: str, request: Request):
+    report = _ai_report_repository(request).get(report_id)
+    if report is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="AI report not found",
+        )
+
+    return report
 
 
 def _provider(provider_name: str) -> TemplateAIReportProvider:
@@ -121,10 +138,15 @@ def _validated_fact(payload: ValidatedFactPayload) -> ValidatedFact:
     )
 
 
-def _report_response(report: AIAnalysisReport) -> AIReportResponse:
+def _report_response(report: AIAnalysisReport, *, report_id: str) -> AIReportResponse:
     return AIReportResponse(
+        id=report_id,
         provider_name=report.provider_name,
         model_name=report.model_name,
         content=report.content,
         input_summary=report.input_summary,
     )
+
+
+def _ai_report_repository(request: Request) -> AIReportRepository:
+    return request.app.state.ai_report_repository

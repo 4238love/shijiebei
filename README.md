@@ -19,7 +19,8 @@ Services:
 
 Docker Compose runs the backend with PostgreSQL-backed repositories for Match
 Predictions, Backtest Runs, Weight Recommendations, and the active Weight
-Version, so created records survive backend container restarts.
+Version, plus AI Analysis Reports, so created records survive backend container
+restarts.
 
 ## Development checks
 

@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 
+from app.ai_report_repository import InMemoryAIReportRepository
 from app.main import create_app
 
 
@@ -45,6 +46,7 @@ def test_create_ai_report_for_gpt_without_mutating_prediction():
 
     assert response.status_code == 201
     body = response.json()
+    assert body["id"]
     assert body["provider_name"] == "gpt"
     assert body["model_name"].startswith("gpt-")
     assert "Brazil vs Croatia" in body["content"]
@@ -61,6 +63,37 @@ def test_create_ai_report_for_deepseek():
     body = response.json()
     assert body["provider_name"] == "deepseek"
     assert body["model_name"] == "deepseek-chat"
+
+
+def test_create_and_retrieve_ai_report():
+    client = TestClient(create_app())
+    created = client.post("/ai-reports", json=report_request("gpt"))
+
+    retrieved = client.get(f"/ai-reports/{created.json()['id']}")
+
+    assert retrieved.status_code == 200
+    assert retrieved.json() == created.json()
+
+
+def test_ai_report_repository_survives_app_recreation():
+    repository = InMemoryAIReportRepository()
+    first_client = TestClient(create_app(ai_report_repository=repository))
+    created = first_client.post("/ai-reports", json=report_request("deepseek")).json()
+
+    second_client = TestClient(create_app(ai_report_repository=repository))
+    retrieved = second_client.get(f"/ai-reports/{created['id']}")
+
+    assert retrieved.status_code == 200
+    assert retrieved.json() == created
+
+
+def test_unknown_ai_report_returns_404():
+    client = TestClient(create_app())
+
+    response = client.get("/ai-reports/not-found")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "AI report not found"
 
 
 def test_unknown_ai_report_provider_is_rejected():

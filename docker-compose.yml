@@ -24,6 +24,7 @@ services:
       PREDICTION_REPOSITORY: postgres
       BACKTEST_REPOSITORY: postgres
       WEIGHT_REPOSITORY: postgres
+      AI_REPORT_REPOSITORY: postgres
       HTTPS_PROXY: ${RUNTIME_HTTPS_PROXY:-http://host.docker.internal:10808}
       HTTP_PROXY: ${RUNTIME_HTTP_PROXY:-http://host.docker.internal:10808}
       NO_PROXY: ${RUNTIME_NO_PROXY:-localhost,127.0.0.1,postgres,backend,frontend,host.docker.internal}

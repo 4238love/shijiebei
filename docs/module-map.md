@@ -39,6 +39,10 @@ This map summarizes the current implementation using the project glossary.
   - Owns AI Analysis Report generation.
   - DeepSeek/GPT provider adapters receive structured copies of prediction data and cannot mutate probabilities or active weights.
 
+- `backend/app/ai_report_repository.py`
+  - Owns the AI Analysis Report repository seam.
+  - Provides in-memory storage for tests/local seams and PostgreSQL storage for Docker deployment.
+
 - `backend/app/weights.py`
   - Owns Weight Recommendation and Weight Version review flow.
   - Recommendations remain inactive until reviewed with a backtest reference.
@@ -69,4 +73,4 @@ This map summarizes the current implementation using the project glossary.
 
 ## Known next deepening opportunity
 
-`PostgresPredictionRepository`, `PostgresBacktestRepository`, and `PostgresWeightRepository` persist serialized API payloads. Future deepening should add richer query seams for Prediction Dataset references, Weight Version lineage, and actual results instead of treating those records as opaque documents.
+`PostgresPredictionRepository`, `PostgresBacktestRepository`, `PostgresWeightRepository`, and `PostgresAIReportRepository` persist serialized API payloads. Future deepening should add richer query seams for Prediction Dataset references, Weight Version lineage, report provenance, and actual results instead of treating those records as opaque documents.
