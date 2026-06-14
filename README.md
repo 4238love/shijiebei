@@ -13,6 +13,7 @@ Services:
 - Frontend: <http://localhost:13000>
 - Live source-backed prediction workbench: <http://localhost:13000>
 - Prediction history and evidence detail: <http://localhost:13000/predictions>
+- Pipeline jobs console: <http://localhost:13000/jobs>
 - Source operations page: <http://localhost:13000/sources>
 - Methodology page: <http://localhost:13000/methodology>
 - Backend health: <http://localhost:8000/health>
@@ -93,5 +94,12 @@ Saved prediction records can be reviewed with their source-backed evidence:
 - Backend history route: `GET /predictions`
 - Backend detail route: `GET /predictions/{id}/record`
 - Frontend history route: `/predictions`
+
+Pipeline jobs can be inspected and run from the browser:
+
+- Backend jobs route: `GET /jobs`
+- Backend run route: `POST /jobs/{job_id}/run`
+- Frontend jobs route: `/jobs`
+- Registered jobs: `ingest-sources`, `validate-sources`, `create-source-backed-prediction`
 
 FIFA, Transfermarkt, OddsPortal, OddsChecker, BBC, and Elo pages are configured as crawl targets; their HTML/dynamic parsers should be added as separate adapters instead of being called directly from the prediction button.

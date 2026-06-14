@@ -11,6 +11,8 @@ This map summarizes the current implementation using the project glossary.
 - `frontend/app/api/predictions/from-sources/route.ts` proxies browser requests to backend `POST /predictions/from-sources`.
 - `frontend/app/predictions/page.tsx` renders saved prediction history from backend `GET /predictions`.
 - `frontend/app/predictions/[id]/page.tsx` renders the saved Prediction Dataset, source summary, and Source Snapshot evidence for a single run.
+- `frontend/app/jobs/page.tsx` and `frontend/app/jobs/jobs-dashboard.tsx` render the pipeline job control room.
+- `frontend/app/api/jobs/` proxies job status and run requests from the browser to the backend.
 - `frontend/app/methodology/page.tsx` renders the technical methodology page.
 
 ## Prediction path
@@ -74,6 +76,10 @@ This map summarizes the current implementation using the project glossary.
 
 - `backend/app/scheduler_jobs.py`
   - Owns scheduled job registration for ingestion, prediction creation, and result collection.
+
+- `backend/app/job_runner.py` and `backend/app/job_api.py`
+  - Own in-process pipeline job state and expose `GET /jobs` plus `POST /jobs/{job_id}/run`.
+  - Registered jobs cover source ingestion, source validation, and source-backed prediction creation.
 
 ## Current deepest seams
 

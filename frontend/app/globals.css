@@ -432,6 +432,82 @@ h2 {
   background: rgba(255, 255, 255, 0.05);
 }
 
+.jobs-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.job-card {
+  display: grid;
+  gap: 16px;
+  padding: 26px;
+  border: 1px solid var(--panel-border);
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(231, 217, 111, 0.1), transparent 15rem),
+    rgba(10, 13, 28, 0.86);
+}
+
+.job-card h2 {
+  font-size: 1.35rem;
+  line-height: 1.15;
+}
+
+.job-card p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.job-status-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.job-status-row span {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 14px;
+  color: var(--accent);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.job-status-row b {
+  color: var(--muted);
+  font-size: 0.68rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.job-summary {
+  min-height: 72px;
+  overflow-wrap: anywhere;
+}
+
+.job-card button {
+  min-height: 48px;
+  border: 1px solid rgba(117, 240, 178, 0.42);
+  border-radius: 999px;
+  color: #060711;
+  background: var(--ok);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.job-card button:disabled {
+  cursor: wait;
+  opacity: 0.56;
+}
+
 .method-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -773,6 +849,8 @@ h2 {
   .dataset-grid,
   .history-grid,
   .evidence-grid,
+  .jobs-grid,
+  .job-status-row,
   .history-probabilities,
   .probability-grid,
   .scorelines,
