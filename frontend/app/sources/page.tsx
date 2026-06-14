@@ -31,7 +31,23 @@ type SourceSnapshotsPayload = {
   snapshots: SourceSnapshotMetadata[];
 };
 
-const implementedAdapters = new Set(["espn_scoreboard", "webpage"]);
+const implementedAdapters = new Set([
+  "betexplorer_odds",
+  "espn_scoreboard",
+  "espn_team_rosters",
+  "espn_team_schedules",
+  "fifa_ranking",
+  "fifa_teams",
+  "injury_news",
+  "news_sentiment",
+  "oddschecker_odds",
+  "oddsportal_odds",
+  "schema_org_schedule",
+  "sportsmole_injuries",
+  "transfermarkt_injuries",
+  "transfermarkt_squads",
+  "world_football_elo",
+]);
 
 async function fetchSources(): Promise<SourcesPayload | null> {
   const backendUrl = process.env.BACKEND_INTERNAL_URL ?? "http://localhost:8000";
@@ -90,9 +106,9 @@ export default async function SourcesPage() {
         <h1>Live data intake map</h1>
         <p className="summary">
           First-wave crawl targets for schedule, form, rankings, injuries, odds,
-          news sentiment, and player data. ESPN JSON and first-wave webpage
-          extraction are wired behind snapshots so predictions do not scrape
-          pages directly at button-click time.
+          news sentiment, and player data. Dedicated source adapters are wired
+          behind snapshots so predictions do not scrape pages directly at
+          button-click time.
         </p>
       </section>
 
