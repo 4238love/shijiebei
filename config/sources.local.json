@@ -31,9 +31,16 @@
       "notes": "Recent event and result material for form extraction."
     },
     {
+      "name": "espn-brazil-team-schedule",
+      "url": "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/teams/205/schedule",
+      "priority": 2,
+      "adapter": "espn_scoreboard",
+      "notes": "Team schedule endpoint with completed Brazil group-stage results, used for recent form extraction."
+    },
+    {
       "name": "world-football-elo",
       "url": "https://www.eloratings.net/",
-      "priority": 2,
+      "priority": 3,
       "adapter": "webpage",
       "notes": "National team Elo ratings and match history context."
     }

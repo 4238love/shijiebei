@@ -323,6 +323,165 @@ def test_espn_scoreboard_adapter_extracts_team_form_facts_for_completed_matches(
     ).value == "win"
 
 
+def test_espn_scoreboard_adapter_extracts_team_form_from_score_objects():
+    tmp_path = workspace_tmp()
+    payload = {
+        "events": [
+            {
+                "id": "760419",
+                "date": "2026-06-13T22:00Z",
+                "status": {"type": {"description": "Full Time"}},
+                "competitions": [
+                    {
+                        "competitors": [
+                            {
+                                "homeAway": "home",
+                                "team": {"displayName": "Brazil"},
+                                "score": {"value": 1.0, "displayValue": "1"},
+                            },
+                            {
+                                "homeAway": "away",
+                                "team": {"displayName": "Morocco"},
+                                "score": {"value": 1.0, "displayValue": "1"},
+                            },
+                        ]
+                    }
+                ],
+            }
+        ]
+    }
+    adapter = EspnScoreboardDataSourceAdapter(
+        source_name="espn-brazil-team-schedule",
+        url="https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/teams/205/schedule",
+        category=SourceCategory.TEAM_FORM,
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=FakeHttpClient(json.dumps(payload).encode()),
+    )
+
+    result = adapter.ingest_schedule()
+
+    assert ("team_match_goals_for", "Brazil", 1) in {
+        (fact.fact_type, fact.entity_key, fact.value) for fact in result.facts
+    }
+    assert ("team_match_goals_against", "Morocco", 1) in {
+        (fact.fact_type, fact.entity_key, fact.value) for fact in result.facts
+    }
+    assert ("team_match_result", "Brazil", "draw") in {
+        (fact.fact_type, fact.entity_key, fact.value) for fact in result.facts
+    }
+
+
+def test_espn_scoreboard_adapter_reads_competition_level_status():
+    tmp_path = workspace_tmp()
+    payload = {
+        "events": [
+            {
+                "id": "760419",
+                "date": "2026-06-13T22:00Z",
+                "competitions": [
+                    {
+                        "status": {"type": {"description": "Full Time"}},
+                        "competitors": [
+                            {
+                                "homeAway": "home",
+                                "team": {"displayName": "Brazil"},
+                                "score": {"displayValue": "1"},
+                            },
+                            {
+                                "homeAway": "away",
+                                "team": {"displayName": "Morocco"},
+                                "score": {"displayValue": "1"},
+                            },
+                        ],
+                    }
+                ],
+            }
+        ]
+    }
+    adapter = EspnScoreboardDataSourceAdapter(
+        source_name="espn-brazil-team-schedule",
+        url="https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/teams/205/schedule",
+        category=SourceCategory.TEAM_FORM,
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=FakeHttpClient(json.dumps(payload).encode()),
+    )
+
+    result = adapter.ingest_schedule()
+
+    assert result.matches[0].status == "Full Time"
+    assert ("team_match_result", "Brazil", "draw") in {
+        (fact.fact_type, fact.entity_key, fact.value) for fact in result.facts
+    }
+
+
+def test_espn_scoreboard_team_form_keeps_latest_completed_match_per_team():
+    tmp_path = workspace_tmp()
+    payload = {
+        "events": [
+            {
+                "id": "older",
+                "date": "2026-06-10T22:00Z",
+                "status": {"type": {"description": "Final"}},
+                "competitions": [
+                    {
+                        "competitors": [
+                            {
+                                "homeAway": "home",
+                                "team": {"displayName": "Brazil"},
+                                "score": "2",
+                            },
+                            {
+                                "homeAway": "away",
+                                "team": {"displayName": "Morocco"},
+                                "score": "0",
+                            },
+                        ]
+                    }
+                ],
+            },
+            {
+                "id": "newer",
+                "date": "2026-06-13T22:00Z",
+                "status": {"type": {"description": "Full Time"}},
+                "competitions": [
+                    {
+                        "competitors": [
+                            {
+                                "homeAway": "home",
+                                "team": {"displayName": "Brazil"},
+                                "score": {"displayValue": "1"},
+                            },
+                            {
+                                "homeAway": "away",
+                                "team": {"displayName": "Morocco"},
+                                "score": {"displayValue": "1"},
+                            },
+                        ]
+                    }
+                ],
+            },
+        ]
+    }
+    adapter = EspnScoreboardDataSourceAdapter(
+        source_name="espn-brazil-team-schedule",
+        url="https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/teams/205/schedule",
+        category=SourceCategory.TEAM_FORM,
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=FakeHttpClient(json.dumps(payload).encode()),
+    )
+
+    result = adapter.ingest_schedule()
+    brazil_facts = [
+        (fact.fact_type, fact.value)
+        for fact in result.facts
+        if fact.entity_key == "Brazil"
+    ]
+
+    assert ("team_match_goals_for", 1) in brazil_facts
+    assert ("team_match_result", "draw") in brazil_facts
+    assert ("team_match_goals_for", 2) not in brazil_facts
+
+
 def test_webpage_schedule_adapter_extracts_schema_org_sports_events():
     tmp_path = workspace_tmp()
     result = HttpWebpageDataSourceAdapter(

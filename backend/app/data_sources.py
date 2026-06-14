@@ -566,8 +566,8 @@ def _schedule_matches_from_espn_scoreboard(
                 away_team=away_team,
                 kickoff_at=event.get("date"),
                 status=_event_status(event),
-                home_score=_optional_int(home.get("score")),
-                away_score=_optional_int(away.get("score")),
+                home_score=_competitor_score(home),
+                away_score=_competitor_score(away),
             )
         )
 
@@ -600,55 +600,67 @@ def _team_form_facts_from_matches(
     *,
     source_name: str,
 ) -> list[NormalizedFact]:
-    facts: list[NormalizedFact] = []
+    latest_by_team: dict[str, tuple[str, int, int]] = {}
     for match in matches:
         if match.home_score is None or match.away_score is None:
             continue
-        if "final" not in match.status.lower():
+        if not _is_completed_match_status(match.status):
             continue
 
+        _record_latest_team_match(
+            latest_by_team,
+            team_name=match.home_team,
+            kickoff_at=match.kickoff_at,
+            goals_for=match.home_score,
+            goals_against=match.away_score,
+        )
+        _record_latest_team_match(
+            latest_by_team,
+            team_name=match.away_team,
+            kickoff_at=match.kickoff_at,
+            goals_for=match.away_score,
+            goals_against=match.home_score,
+        )
+
+    facts: list[NormalizedFact] = []
+    for team_name, (_, goals_for, goals_against) in latest_by_team.items():
         facts.extend(
             [
                 NormalizedFact(
                     fact_type="team_match_goals_for",
-                    entity_key=match.home_team,
-                    value=match.home_score,
+                    entity_key=team_name,
+                    value=goals_for,
                     source_name=source_name,
                 ),
                 NormalizedFact(
                     fact_type="team_match_goals_against",
-                    entity_key=match.home_team,
-                    value=match.away_score,
+                    entity_key=team_name,
+                    value=goals_against,
                     source_name=source_name,
                 ),
                 NormalizedFact(
                     fact_type="team_match_result",
-                    entity_key=match.home_team,
-                    value=_match_result(match.home_score, match.away_score),
-                    source_name=source_name,
-                ),
-                NormalizedFact(
-                    fact_type="team_match_goals_for",
-                    entity_key=match.away_team,
-                    value=match.away_score,
-                    source_name=source_name,
-                ),
-                NormalizedFact(
-                    fact_type="team_match_goals_against",
-                    entity_key=match.away_team,
-                    value=match.home_score,
-                    source_name=source_name,
-                ),
-                NormalizedFact(
-                    fact_type="team_match_result",
-                    entity_key=match.away_team,
-                    value=_match_result(match.away_score, match.home_score),
+                    entity_key=team_name,
+                    value=_match_result(goals_for, goals_against),
                     source_name=source_name,
                 ),
             ]
         )
-
     return facts
+
+
+def _record_latest_team_match(
+    latest_by_team: dict[str, tuple[str, int, int]],
+    *,
+    team_name: str,
+    kickoff_at: str | None,
+    goals_for: int,
+    goals_against: int,
+) -> None:
+    sort_key = kickoff_at or ""
+    current = latest_by_team.get(team_name)
+    if current is None or sort_key >= current[0]:
+        latest_by_team[team_name] = (sort_key, goals_for, goals_against)
 
 
 def _match_result(goals_for: int, goals_against: int) -> str:
@@ -658,6 +670,14 @@ def _match_result(goals_for: int, goals_against: int) -> str:
         return "draw"
 
     return "loss"
+
+
+def _is_completed_match_status(status: str) -> bool:
+    normalized = status.strip().lower()
+    return any(
+        marker in normalized
+        for marker in ("final", "full time", "ft", "completed")
+    )
 
 
 def _event_competitors(event: dict) -> list[dict]:
@@ -689,8 +709,19 @@ def _competitor_team_name(competitor: dict) -> str | None:
     )
 
 
+def _competitor_score(competitor: dict) -> int | None:
+    score = competitor.get("score")
+    if isinstance(score, dict):
+        return _optional_int(score.get("displayValue") or score.get("value"))
+    return _optional_int(score)
+
+
 def _event_status(event: dict) -> str:
     status_type = event.get("status", {}).get("type", {})
+    if not status_type:
+        competitions = event.get("competitions", [])
+        if competitions:
+            status_type = competitions[0].get("status", {}).get("type", {})
     return status_type.get("description") or status_type.get("name") or "unknown"
 
 
