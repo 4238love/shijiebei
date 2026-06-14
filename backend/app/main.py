@@ -9,6 +9,7 @@ from app.backtest_api import router as backtest_router
 from app.backtest_repository import BacktestRepository, default_backtest_repository
 from app.health import router as health_router
 from app.job_api import create_job_runner, router as job_router
+from app.job_repository import JobRunRepository, default_job_run_repository
 from app.methodology_api import router as methodology_router
 from app.prediction_api import router as prediction_router
 from app.prediction_repository import PredictionRepository, default_prediction_repository
@@ -36,6 +37,7 @@ def create_app(
     weight_repository: WeightRecommendationRepository | None = None,
     ai_report_repository: AIReportRepository | None = None,
     source_snapshot_repository: SourceSnapshotRepository | None = None,
+    job_run_repository: JobRunRepository | None = None,
     *,
     source_config_path: Path | None = None,
     source_snapshot_dir: Path | None = None,
@@ -56,7 +58,10 @@ def create_app(
     app.state.weight_registry = create_weight_registry(
         repository=weight_repository or default_weight_repository()
     )
-    app.state.job_runner = create_job_runner(app)
+    app.state.job_runner = create_job_runner(
+        app,
+        job_run_repository=job_run_repository or default_job_run_repository(),
+    )
 
     app.add_middleware(
         CORSMiddleware,

@@ -9,7 +9,8 @@ from fastapi import APIRouter, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 
 from app.cross_source_validation import CrossSourceValidator, NormalizedFact
-from app.job_runner import InMemoryJobRunner, JobDefinition, JobRunRecord, JobState
+from app.job_repository import JobRunRecord, JobRunRepository
+from app.job_runner import InMemoryJobRunner, JobDefinition, JobState
 from app.prediction_dataset_builder import build_prediction_dataset_from_validated_facts
 from app.prediction_engine import run_match_prediction
 from app.source_config import SourceDefinition, load_source_catalog_config
@@ -69,7 +70,10 @@ async def run_job(job_id: str, request: Request):
     return _job_run_response(record)
 
 
-def create_job_runner(app) -> InMemoryJobRunner:
+def create_job_runner(
+    app,
+    job_run_repository: JobRunRepository | None = None,
+) -> InMemoryJobRunner:
     return InMemoryJobRunner(
         [
             JobDefinition(
@@ -90,7 +94,8 @@ def create_job_runner(app) -> InMemoryJobRunner:
                 interval_minutes=60,
                 handler=lambda: _create_source_backed_prediction_job(app),
             ),
-        ]
+        ],
+        run_repository=job_run_repository,
     )
 
 

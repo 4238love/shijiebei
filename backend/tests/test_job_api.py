@@ -3,6 +3,7 @@ from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
+from app.job_repository import InMemoryJobRunRepository, JobRunRecord
 from app.main import create_app
 
 
@@ -28,7 +29,7 @@ def workspace_tmp() -> Path:
     return path
 
 
-def configured_client() -> TestClient:
+def configured_client(job_run_repository=None) -> TestClient:
     tmp_path = workspace_tmp()
     config_path = tmp_path / "sources.json"
     ranking_url = "https://data-source.example/ranking.html"
@@ -56,6 +57,7 @@ def configured_client() -> TestClient:
                     ranking_url: b"<html><body>1 Brazil 2082 12 Croatia 1900</body></html>",
                 }
             ),
+            job_run_repository=job_run_repository,
         )
     )
 
@@ -92,6 +94,30 @@ def test_validate_sources_job_records_status_and_summary():
     )
     assert job["run_count"] == 1
     assert job["last_run"]["id"] == run["id"]
+
+
+def test_jobs_endpoint_reads_existing_run_repository_state():
+    repository = InMemoryJobRunRepository()
+    repository.save(
+        JobRunRecord(
+            id="existing-run",
+            job_id="validate-sources",
+            status="succeeded",
+            started_at="2026-06-14T00:00:00+00:00",
+            finished_at="2026-06-14T00:00:01+00:00",
+            summary={"source_count": 1},
+        )
+    )
+    client = configured_client(job_run_repository=repository)
+
+    response = client.get("/jobs")
+
+    assert response.status_code == 200
+    body = response.json()
+    job = next(item for item in body["jobs"] if item["job_id"] == "validate-sources")
+    assert job["run_count"] == 1
+    assert job["last_run"]["id"] == "existing-run"
+    assert body["recent_runs"][0]["id"] == "existing-run"
 
 
 def test_prediction_job_creates_saved_prediction_record():

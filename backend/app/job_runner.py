@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 from typing import Callable
 from uuid import uuid4
 
+from app.job_repository import InMemoryJobRunRepository, JobRunRecord, JobRunRepository
+
 
 JobHandler = Callable[[], dict]
 
@@ -17,17 +19,6 @@ class JobDefinition:
     handler: JobHandler
 
 
-@dataclass(frozen=True)
-class JobRunRecord:
-    id: str
-    job_id: str
-    status: str
-    started_at: str
-    finished_at: str
-    summary: dict
-    error: str | None = None
-
-
 @dataclass
 class JobState:
     job_id: str
@@ -38,23 +29,28 @@ class JobState:
 
 
 class InMemoryJobRunner:
-    def __init__(self, definitions: list[JobDefinition]):
+    def __init__(
+        self,
+        definitions: list[JobDefinition],
+        run_repository: JobRunRepository | None = None,
+    ):
         self._definitions = {definition.job_id: definition for definition in definitions}
-        self._states = {
-            definition.job_id: JobState(
+        self._run_repository = run_repository or InMemoryJobRunRepository()
+
+    def list_states(self) -> list[JobState]:
+        return [
+            JobState(
                 job_id=definition.job_id,
                 label=definition.label,
                 interval_minutes=definition.interval_minutes,
+                run_count=self._run_repository.count_by_job(definition.job_id),
+                last_run=self._run_repository.last_for_job(definition.job_id),
             )
-            for definition in definitions
-        }
-        self._runs: list[JobRunRecord] = []
-
-    def list_states(self) -> list[JobState]:
-        return list(self._states.values())
+            for definition in self._definitions.values()
+        ]
 
     def recent_runs(self, limit: int = 20) -> list[JobRunRecord]:
-        return list(reversed(self._runs[-limit:]))
+        return self._run_repository.list_recent(limit=limit)
 
     def run(self, job_id: str) -> JobRunRecord:
         definition = self._definitions.get(job_id)
@@ -84,10 +80,7 @@ class InMemoryJobRunner:
                 summary=summary,
             )
 
-        self._runs.append(record)
-        state = self._states[job_id]
-        state.run_count += 1
-        state.last_run = record
+        self._run_repository.save(record)
         return record
 
 
