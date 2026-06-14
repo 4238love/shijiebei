@@ -354,6 +354,27 @@ def test_webpage_adapter_extracts_odds_news_sentiment_and_player_facts():
     assert player_result.facts[0].entity_key == "Neymar"
 
 
+def test_webpage_adapter_extracts_ranking_facts():
+    tmp_path = workspace_tmp()
+    result = HttpWebpageDataSourceAdapter(
+        source_name="world-football-elo-ranking",
+        url="https://www.eloratings.net/",
+        category=SourceCategory.RANKING,
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=FakeHttpClient(
+            b"<html><body>1 Argentina 2145 2 France 2098 3 Brazil 2082</body></html>"
+        ),
+    ).ingest_snapshot()
+
+    assert result.item_count == 6
+    assert ("team_ranking_position", "Argentina", 1) in {
+        (fact.fact_type, fact.entity_key, fact.value) for fact in result.facts
+    }
+    assert ("team_rating", "Brazil", 2082.0) in {
+        (fact.fact_type, fact.entity_key, fact.value) for fact in result.facts
+    }
+
+
 def test_sources_api_lists_configured_source_catalog():
     tmp_path = workspace_tmp()
     config_path = tmp_path / "sources.json"

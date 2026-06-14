@@ -496,6 +496,8 @@ def _facts_from_webpage(
         return _news_sentiment_facts(text, source_name=source_name)
     if category == SourceCategory.PLAYER:
         return _player_facts(text, source_name=source_name)
+    if category == SourceCategory.RANKING:
+        return _ranking_facts(text, source_name=source_name)
 
     title = _html_title(content)
     if title:
@@ -652,6 +654,37 @@ def _player_facts(text: str, *, source_name: str) -> list[NormalizedFact]:
                 value="listed",
                 source_name=source_name,
             )
+        )
+
+    return facts
+
+
+def _ranking_facts(text: str, *, source_name: str) -> list[NormalizedFact]:
+    pattern = re.compile(
+        r"\b(\d{1,3})\s+([A-Z][A-Za-z' .-]{1,40}?)\s+(\d{3,4}(?:\.\d+)?)\b"
+    )
+    facts: list[NormalizedFact] = []
+    seen: set[str] = set()
+    for match in pattern.finditer(text):
+        team_name = _clean_entity_name(match.group(2))
+        if not team_name or team_name in seen:
+            continue
+        seen.add(team_name)
+        facts.extend(
+            [
+                NormalizedFact(
+                    fact_type="team_ranking_position",
+                    entity_key=team_name,
+                    value=int(match.group(1)),
+                    source_name=source_name,
+                ),
+                NormalizedFact(
+                    fact_type="team_rating",
+                    entity_key=team_name,
+                    value=float(match.group(3)),
+                    source_name=source_name,
+                ),
+            ]
         )
 
     return facts
