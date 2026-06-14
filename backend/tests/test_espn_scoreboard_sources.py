@@ -592,6 +592,80 @@ def test_webpage_adapter_extracts_match_line_one_x_two_odds():
     ]
 
 
+def test_webpage_adapter_extracts_betexplorer_match_row_one_x_two_odds():
+    tmp_path = workspace_tmp()
+    result = HttpWebpageDataSourceAdapter(
+        source_name="betexplorer-world-cup",
+        url="https://www.betexplorer.com/football/world/world-cup/",
+        category=SourceCategory.ODDS,
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=FakeHttpClient(
+            b"""
+            <html><body>
+              <li class="showHide table-main__tournamentLiContent" data-event-id="b5JayTEd">
+                <a href="/football/world/world-championship-2026/brazil-morocco/b5JayTEd/">
+                  <div class="table-main__participantHome"><p>Brazil</p></div>
+                  <div class="table-main__participantAway"><p>Morocco</p></div>
+                </a>
+                <div class="table-main__oddsLi oddsColumn">
+                  <p data-odd="1.68" data-odd-max="1.72"></p>
+                  <p data-odd="3.73" data-odd-max="3.90"></p>
+                  <p data-odd="5.52" data-odd-max="6.00"></p>
+                </div>
+              </li>
+            </body></html>
+            """
+        ),
+    ).ingest_snapshot()
+
+    assert result.item_count == 3
+    assert [
+        (fact.fact_type, fact.entity_key, fact.value) for fact in result.facts
+    ] == [
+        ("decimal_odds", "Brazil", 1.68),
+        ("match_draw_decimal_odds", "Brazil vs Morocco", 3.73),
+        ("decimal_odds", "Morocco", 5.52),
+    ]
+
+
+def test_webpage_adapter_limits_betexplorer_rows_to_world_championship_section():
+    tmp_path = workspace_tmp()
+    result = HttpWebpageDataSourceAdapter(
+        source_name="betexplorer-world-cup",
+        url="https://www.betexplorer.com/football/world/world-cup/",
+        category=SourceCategory.ODDS,
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=FakeHttpClient(
+            b"""
+            <html><body>
+              <ul class="leagues-list" data-country="world">
+                <a data-league-name="World Championship 2026"></a>
+                <li class="showHide table-main__tournamentLiContent" data-event-id="b5JayTEd">
+                  <div class="table-main__participantHome"><p>Brazil</p></div>
+                  <div class="table-main__participantAway"><p>Morocco</p></div>
+                  <p data-odd="1.68"></p><p data-odd="3.73"></p><p data-odd="5.52"></p>
+                </li>
+              </ul>
+              <ul class="leagues-list" data-country="argentina">
+                <a data-league-name="Primera Nacional"></a>
+                <li class="showHide table-main__tournamentLiContent" data-event-id="tjQ2vYZO">
+                  <div class="table-main__participantHome"><p>Gimnasia Jujuy</p></div>
+                  <div class="table-main__participantAway"><p>San Martin S.J.</p></div>
+                  <p data-odd="1.85"></p><p data-odd="3.20"></p><p data-odd="4.00"></p>
+                </li>
+              </ul>
+            </body></html>
+            """
+        ),
+    ).ingest_snapshot()
+
+    entity_keys = {fact.entity_key for fact in result.facts}
+    assert "Brazil" in entity_keys
+    assert "Morocco" in entity_keys
+    assert "Gimnasia Jujuy" not in entity_keys
+    assert "San Martin S.J" not in entity_keys
+
+
 def test_webpage_adapter_extracts_market_prices_from_embedded_script_data():
     tmp_path = workspace_tmp()
     result = HttpWebpageDataSourceAdapter(

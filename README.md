@@ -99,6 +99,9 @@ The homepage includes the same flow behind a browser form. Choose home/away team
 `decimal_odds` facts now influence the Prediction Dataset when both teams have
 market prices: lower decimal odds increase the team's market strength factor,
 raise attack index, and reduce defensive weakness before Monte Carlo simulation.
+BetExplorer-style static match rows with `data-odd` 1X2 prices are parsed into
+home/draw/away facts, so captured marketplace HTML can produce team-scoped odds
+instead of only loose market price samples.
 
 Team-scoped injury segments such as `Brazil: Neymar doubtful, Vinicius Junior
 suspended` emit `team_unavailable_player_count` facts. Those facts reduce the

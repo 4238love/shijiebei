@@ -251,6 +251,73 @@ def test_create_match_prediction_from_odds_sources_uses_market_prices():
     ]
 
 
+def test_create_match_prediction_from_betexplorer_odds_row_uses_market_prices():
+    tmp_path = workspace_tmp()
+    config_path = tmp_path / "sources.json"
+    odds_url = "https://data-source.example/betexplorer.html"
+    config_path.write_text(
+        """
+        {
+          "odds": [
+            {
+              "name": "betexplorer-source",
+              "url": "https://data-source.example/betexplorer.html",
+              "priority": 1,
+              "adapter": "webpage"
+            }
+          ]
+        }
+        """,
+        encoding="utf-8",
+    )
+    client = TestClient(
+        create_app(
+            source_config_path=config_path,
+            source_snapshot_dir=tmp_path / "snapshots",
+            source_http_client=UrlMappedHttpClient(
+                {
+                    odds_url: b"""
+                    <html><body>
+                      <li class="showHide table-main__tournamentLiContent" data-event-id="b5JayTEd">
+                        <a href="/football/world/world-championship-2026/brazil-morocco/b5JayTEd/">
+                          <div class="table-main__participantHome"><p>Brazil</p></div>
+                          <div class="table-main__participantAway"><p>Morocco</p></div>
+                        </a>
+                        <div class="table-main__oddsLi oddsColumn">
+                          <p data-odd="1.68"></p>
+                          <p data-odd="3.73"></p>
+                          <p data-odd="5.52"></p>
+                        </div>
+                      </li>
+                    </body></html>
+                    """,
+                }
+            ),
+        )
+    )
+
+    response = client.post(
+        "/predictions/from-sources",
+        json={
+            "home_team": "Brazil",
+            "away_team": "Morocco",
+            "category": "odds",
+            "simulation_count": 1_000,
+            "seed": 20260614,
+        },
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["source_summary"]["validated_fact_count"] == 3
+    assert body["dataset"]["home"]["attack_index"] > body["dataset"]["away"][
+        "attack_index"
+    ]
+    assert body["dataset"]["home"]["defense_weakness"] < body["dataset"]["away"][
+        "defense_weakness"
+    ]
+
+
 def test_create_match_prediction_from_injury_sources_uses_team_availability():
     tmp_path = workspace_tmp()
     config_path = tmp_path / "sources.json"

@@ -810,6 +810,13 @@ def _team_unavailable_player_count_facts(
 
 
 def _odds_facts(text: str, *, source_name: str) -> list[NormalizedFact]:
+    betexplorer_match_row_facts = _betexplorer_match_row_odds_facts(
+        text,
+        source_name=source_name,
+    )
+    if betexplorer_match_row_facts:
+        return betexplorer_match_row_facts
+
     match_line_facts = _match_line_odds_facts(
         _html_to_text(text),
         source_name=source_name,
@@ -856,6 +863,117 @@ def _odds_facts(text: str, *, source_name: str) -> list[NormalizedFact]:
             break
 
     return market_prices
+
+
+def _betexplorer_match_row_odds_facts(
+    content: str,
+    *,
+    source_name: str,
+) -> list[NormalizedFact]:
+    facts: list[NormalizedFact] = []
+    seen_matches: set[str] = set()
+    for section in _betexplorer_relevant_odds_sections(content):
+        row_starts = [
+            match.start()
+            for match in re.finditer(
+                r"<li\b[^>]*table-main__tournamentLiContent[^>]*data-event-id=",
+                section,
+                flags=re.IGNORECASE,
+            )
+        ]
+        for index, start in enumerate(row_starts):
+            end = row_starts[index + 1] if index + 1 < len(row_starts) else len(section)
+            row = section[start:end]
+            home_team = _betexplorer_participant_name(row, "participantHome")
+            away_team = _betexplorer_participant_name(row, "participantAway")
+            odds = _betexplorer_row_decimal_odds(row)
+            match_key = f"{home_team} vs {away_team}"
+            if (
+                not home_team
+                or not away_team
+                or len(odds) < 3
+                or match_key in seen_matches
+            ):
+                continue
+
+            seen_matches.add(match_key)
+            facts.extend(
+                [
+                    NormalizedFact(
+                        fact_type="decimal_odds",
+                        entity_key=home_team,
+                        value=odds[0],
+                        source_name=source_name,
+                    ),
+                    NormalizedFact(
+                        fact_type="match_draw_decimal_odds",
+                        entity_key=match_key,
+                        value=odds[1],
+                        source_name=source_name,
+                    ),
+                    NormalizedFact(
+                        fact_type="decimal_odds",
+                        entity_key=away_team,
+                        value=odds[2],
+                        source_name=source_name,
+                    ),
+                ]
+            )
+
+    return facts
+
+
+def _betexplorer_relevant_odds_sections(content: str) -> list[str]:
+    markers = list(
+        re.finditer(
+            r'data-league-name=["\']World Championship 2026["\']',
+            content,
+            flags=re.IGNORECASE,
+        )
+    )
+    if not markers:
+        return [content]
+
+    sections: list[str] = []
+    for marker in markers:
+        section_start = content.rfind("<ul", 0, marker.start())
+        if section_start == -1:
+            section_start = marker.start()
+        next_section = re.search(
+            r"<ul\b[^>]*leagues-list",
+            content[marker.end() :],
+            flags=re.IGNORECASE,
+        )
+        section_end = (
+            marker.end() + next_section.start() if next_section else len(content)
+        )
+        sections.append(content[section_start:section_end])
+
+    return sections
+
+
+def _betexplorer_participant_name(row: str, class_fragment: str) -> str | None:
+    match = re.search(
+        rf"<[^>]*{class_fragment}[^>]*>.*?<p[^>]*>(.*?)</p>",
+        row,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    if not match:
+        return None
+
+    team_name = _clean_entity_name(_html_to_text(match.group(1)))
+    return team_name or None
+
+
+def _betexplorer_row_decimal_odds(row: str) -> list[float]:
+    odds: list[float] = []
+    for match in re.finditer(r'\bdata-odd="([1-9]\d?(?:\.\d+)?)"', row):
+        price = float(match.group(1))
+        odds.append(price)
+        if len(odds) >= 3:
+            break
+
+    return odds
 
 
 def _match_line_odds_facts(text: str, *, source_name: str) -> list[NormalizedFact]:
