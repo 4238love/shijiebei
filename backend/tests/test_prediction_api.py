@@ -220,7 +220,7 @@ def test_create_match_prediction_from_odds_sources_uses_market_prices():
             source_snapshot_dir=tmp_path / "snapshots",
             source_http_client=UrlMappedHttpClient(
                 {
-                    odds_url: b"<html><body>Brazil 1.80 Draw 3.40 Croatia 4.20</body></html>",
+                    odds_url: b"<html><body>Brazil v Croatia 1.80 3.40 4.20</body></html>",
                 }
             ),
         )

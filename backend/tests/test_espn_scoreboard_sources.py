@@ -465,6 +465,28 @@ def test_webpage_adapter_extracts_market_price_fallback_when_team_names_are_miss
     assert result.facts[0].value == 1.68
 
 
+def test_webpage_adapter_extracts_match_line_one_x_two_odds():
+    tmp_path = workspace_tmp()
+    result = HttpWebpageDataSourceAdapter(
+        source_name="betexplorer-world-cup",
+        url="https://www.betexplorer.com/football/world/world-cup/",
+        category=SourceCategory.ODDS,
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=FakeHttpClient(
+            b"<html><body>Brazil v Croatia 1.80 3.40 4.20</body></html>"
+        ),
+    ).ingest_snapshot()
+
+    assert result.item_count == 3
+    assert [
+        (fact.fact_type, fact.entity_key, fact.value) for fact in result.facts
+    ] == [
+        ("decimal_odds", "Brazil", 1.80),
+        ("match_draw_decimal_odds", "Brazil vs Croatia", 3.40),
+        ("decimal_odds", "Croatia", 4.20),
+    ]
+
+
 def test_webpage_adapter_extracts_market_prices_from_embedded_script_data():
     tmp_path = workspace_tmp()
     result = HttpWebpageDataSourceAdapter(

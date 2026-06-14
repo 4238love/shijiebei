@@ -696,6 +696,13 @@ def _injury_facts(text: str, *, source_name: str) -> list[NormalizedFact]:
 
 
 def _odds_facts(text: str, *, source_name: str) -> list[NormalizedFact]:
+    match_line_facts = _match_line_odds_facts(
+        _html_to_text(text),
+        source_name=source_name,
+    )
+    if match_line_facts:
+        return match_line_facts
+
     pattern = re.compile(r"\b([A-Z][A-Za-z' -]{1,32})\s+([1-9]\d?\.\d{2})\b")
     facts: list[NormalizedFact] = []
     seen: set[str] = set()
@@ -735,6 +742,48 @@ def _odds_facts(text: str, *, source_name: str) -> list[NormalizedFact]:
             break
 
     return market_prices
+
+
+def _match_line_odds_facts(text: str, *, source_name: str) -> list[NormalizedFact]:
+    pattern = re.compile(
+        r"\b([A-Z][A-Za-z' .-]{1,40}?)\s+(?:v|vs\.?|[-–—])\s+"
+        r"([A-Z][A-Za-z' .-]{1,40}?)\s+"
+        r"([1-9]\d?\.\d{2})\s+([1-9]\d?\.\d{2})\s+([1-9]\d?\.\d{2})\b",
+        re.IGNORECASE,
+    )
+    facts: list[NormalizedFact] = []
+    seen_matches: set[str] = set()
+    for match in pattern.finditer(text):
+        home_team = _clean_entity_name(match.group(1))
+        away_team = _clean_entity_name(match.group(2))
+        match_key = f"{home_team} vs {away_team}"
+        if not home_team or not away_team or match_key in seen_matches:
+            continue
+        seen_matches.add(match_key)
+        facts.extend(
+            [
+                NormalizedFact(
+                    fact_type="decimal_odds",
+                    entity_key=home_team,
+                    value=float(match.group(3)),
+                    source_name=source_name,
+                ),
+                NormalizedFact(
+                    fact_type="match_draw_decimal_odds",
+                    entity_key=match_key,
+                    value=float(match.group(4)),
+                    source_name=source_name,
+                ),
+                NormalizedFact(
+                    fact_type="decimal_odds",
+                    entity_key=away_team,
+                    value=float(match.group(5)),
+                    source_name=source_name,
+                ),
+            ]
+        )
+
+    return facts
 
 
 def _news_sentiment_facts(text: str, *, source_name: str) -> list[NormalizedFact]:
