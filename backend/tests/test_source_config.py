@@ -131,3 +131,14 @@ def test_local_source_config_uses_dedicated_injury_news_adapter():
 
     assert len(injury_news_sources) == 2
     assert {source.adapter for source in injury_news_sources} == {"injury_news"}
+
+
+def test_local_source_config_uses_dedicated_oddsportal_odds_adapter():
+    config = load_source_catalog_config(Path("config/sources.local.json"))
+
+    oddsportal_sources = [
+        source for source in config.sources if source.name == "oddsportal-world-cup"
+    ]
+
+    assert len(oddsportal_sources) == 1
+    assert oddsportal_sources[0].adapter == "oddsportal_odds"

@@ -14,6 +14,7 @@ from app.data_sources import (
     InjuryNewsDataSourceAdapter,
     NewsSentimentDataSourceAdapter,
     OddsCheckerOddsDataSourceAdapter,
+    OddsPortalOddsDataSourceAdapter,
     SchemaOrgScheduleDataSourceAdapter,
     SportsMoleInjuryDataSourceAdapter,
     SourceCategory,
@@ -1583,6 +1584,24 @@ def test_webpage_adapter_extracts_market_prices_from_embedded_script_data():
     assert [fact.value for fact in result.facts] == [1.68, 3.75, 5.21]
 
 
+def test_oddsportal_adapter_extracts_embedded_market_prices():
+    tmp_path = workspace_tmp()
+    result = OddsPortalOddsDataSourceAdapter(
+        source_name="oddsportal-world-cup",
+        url="https://www.oddsportal.com/football/world/world-championship-2026/",
+        category=SourceCategory.ODDS,
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=FakeHttpClient(
+            b"<html><script>window.__ODDSPORTAL__={odds:[1.68,3.75,5.21]}</script></html>"
+        ),
+    ).ingest_odds()
+
+    assert result.status == "ingested"
+    assert result.snapshot is not None
+    assert result.item_count == 3
+    assert [fact.value for fact in result.facts] == [1.68, 3.75, 5.21]
+
+
 def test_webpage_adapter_extracts_ranking_facts():
     tmp_path = workspace_tmp()
     result = HttpWebpageDataSourceAdapter(
@@ -2017,6 +2036,29 @@ def test_source_ingestion_routes_oddschecker_odds_adapter():
     assert result.status == "ingested"
     assert result.facts[0].fact_type == "decimal_odds"
     assert result.facts[0].source_name == "oddschecker-world-cup"
+
+
+def test_source_ingestion_routes_oddsportal_odds_adapter():
+    tmp_path = workspace_tmp()
+    url = "https://www.oddsportal.com/football/world/world-championship-2026/"
+
+    result = ingest_source(
+        SourceDefinition(
+            category=SourceCategory.ODDS,
+            name="oddsportal-world-cup",
+            url=url,
+            priority=1,
+            adapter="oddsportal_odds",
+        ),
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=FakeHttpClient(
+            b"<html><body>Brazil v Croatia 1.80 3.40 4.20</body></html>"
+        ),
+    )
+
+    assert result.status == "ingested"
+    assert result.facts[0].fact_type == "decimal_odds"
+    assert result.facts[0].source_name == "oddsportal-world-cup"
 
 
 def test_source_ingestion_routes_betexplorer_odds_adapter():

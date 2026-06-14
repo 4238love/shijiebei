@@ -150,6 +150,9 @@ BetExplorer-style static match rows with `data-odd` 1X2 prices are parsed by
 the dedicated `betexplorer_odds` adapter into home/draw/away facts, so captured
 marketplace HTML can produce team-scoped odds instead of only loose market price
 samples.
+OddsPortal uses the dedicated `oddsportal_odds` adapter for static match-line
+prices and embedded market price fragments, while still treating dynamic
+rendering as a source availability constraint.
 OddsChecker is configured as an additional odds comparison crawl target using
 the dedicated `oddschecker_odds` adapter, including decimal and fractional
 price parsing for 1X2 match cards.
@@ -206,5 +209,5 @@ as crawl targets. Dedicated parsers should be added as separate adapters when a
 source needs more than the generic webpage parser; current dedicated adapters
 cover ESPN discovery, Schema.org schedules, FIFA ranking, Sports Mole injuries,
 Transfermarkt injuries, injury-news fallbacks, news sentiment, and World
-Football Elo, plus BetExplorer/OddsChecker match-card odds and Transfermarkt
+Football Elo, plus OddsPortal/BetExplorer/OddsChecker odds and Transfermarkt
 squad rows.

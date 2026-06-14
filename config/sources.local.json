@@ -96,8 +96,8 @@
       "name": "oddsportal-world-cup",
       "url": "https://www.oddsportal.com/football/world/world-championship-2026/",
       "priority": 1,
-      "adapter": "webpage",
-      "notes": "Market odds comparison source; dynamic rendering likely."
+      "adapter": "oddsportal_odds",
+      "notes": "Market odds comparison source; dedicated adapter parses static match lines and embedded price fragments."
     },
     {
       "name": "betexplorer-world-cup",

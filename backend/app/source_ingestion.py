@@ -13,6 +13,7 @@ from app.data_sources import (
     InjuryNewsDataSourceAdapter,
     NewsSentimentDataSourceAdapter,
     OddsCheckerOddsDataSourceAdapter,
+    OddsPortalOddsDataSourceAdapter,
     SchemaOrgScheduleDataSourceAdapter,
     SportsMoleInjuryDataSourceAdapter,
     SourceIngestionResult,
@@ -132,6 +133,16 @@ def ingest_source(
 
     if definition.adapter == "oddschecker_odds":
         result = OddsCheckerOddsDataSourceAdapter(
+            source_name=definition.name,
+            url=definition.url,
+            category=definition.category,
+            snapshot_dir=snapshot_dir,
+            http_client=http_client,
+        ).ingest_odds()
+        return replace(result, category=definition.category)
+
+    if definition.adapter == "oddsportal_odds":
+        result = OddsPortalOddsDataSourceAdapter(
             source_name=definition.name,
             url=definition.url,
             category=definition.category,
