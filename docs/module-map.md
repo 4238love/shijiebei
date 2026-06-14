@@ -9,6 +9,8 @@ This map summarizes the current implementation using the project glossary.
 - `frontend/app/page.tsx` renders health status and mounts the live prediction workbench.
 - `frontend/app/source-backed-prediction-workbench.tsx` lets an operator pick teams/source scope and run source-backed predictions from the browser.
 - `frontend/app/api/predictions/from-sources/route.ts` proxies browser requests to backend `POST /predictions/from-sources`.
+- `frontend/app/predictions/page.tsx` renders saved prediction history from backend `GET /predictions`.
+- `frontend/app/predictions/[id]/page.tsx` renders the saved Prediction Dataset, source summary, and Source Snapshot evidence for a single run.
 - `frontend/app/methodology/page.tsx` renders the technical methodology page.
 
 ## Prediction path
@@ -22,7 +24,7 @@ This map summarizes the current implementation using the project glossary.
   - Turns non-confirmed facts into the Conflict Status penalty used by Confidence Level.
 
 - `backend/app/prediction_api.py`
-  - Exposes `POST /predictions`, `POST /predictions/from-sources`, and `GET /predictions/{id}`.
+  - Exposes `GET /predictions`, `POST /predictions`, `POST /predictions/from-sources`, `GET /predictions/{id}`, and `GET /predictions/{id}/record`.
 
 - `backend/app/prediction_repository.py`
   - Owns the Prediction Repository seam used by `prediction_api.py`.

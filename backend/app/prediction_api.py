@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 
 from app.cross_source_validation import CrossSourceValidator, NormalizedFact, ValidatedFact
@@ -86,10 +86,54 @@ class SourceBackedPredictionSummary(BaseModel):
     conflict_count: int
 
 
+class SourceEvidenceResponse(BaseModel):
+    source_name: str
+    category: str | None
+    status: str
+    snapshot_path: str | None
+    content_hash: str | None
+    item_count: int
+    fact_count: int
+    match_count: int
+    message: str | None
+
+
 class SourceBackedPredictionResponse(BaseModel):
     prediction: PredictionResponse
     dataset: PredictionDatasetPayload
     source_summary: SourceBackedPredictionSummary
+    source_evidence: list[SourceEvidenceResponse] = Field(default_factory=list)
+
+
+class PredictionHistoryItemResponse(BaseModel):
+    id: str
+    home_team: str
+    away_team: str
+    probabilities: dict[str, float]
+    confidence_level: str
+    source_summary: SourceBackedPredictionSummary | None = None
+
+
+class PredictionHistoryResponse(BaseModel):
+    predictions: list[PredictionHistoryItemResponse]
+
+
+class PredictionRecordResponse(BaseModel):
+    prediction: PredictionResponse
+    dataset: PredictionDatasetPayload | None = None
+    source_summary: SourceBackedPredictionSummary | None = None
+    source_evidence: list[SourceEvidenceResponse] = Field(default_factory=list)
+
+
+@router.get("", response_model=PredictionHistoryResponse)
+async def list_predictions(
+    request: Request,
+    limit: int = Query(default=20, ge=1, le=100),
+):
+    records = _prediction_repository(request).list_recent(limit=limit)
+    return PredictionHistoryResponse(
+        predictions=[_history_item_response(record) for record in records]
+    )
 
 
 @router.post("", status_code=status.HTTP_201_CREATED, response_model=PredictionResponse)
@@ -152,19 +196,44 @@ async def create_prediction_from_sources(
         seed=payload.seed,
     )
     response = _prediction_response(prediction, prediction_id=str(uuid4()))
-    _prediction_repository(request).save(response.model_dump())
+    dataset_response = _dataset_response(dataset)
+    source_summary = SourceBackedPredictionSummary(
+        ingested_source_count=len(results),
+        snapshot_count=sum(1 for result in results if result.snapshot is not None),
+        normalized_fact_count=len(normalized_facts),
+        validated_fact_count=len(validated_facts),
+        conflict_count=dataset.conflict_count,
+    )
+    source_evidence = [_source_evidence_response(result) for result in results]
+    _prediction_repository(request).save(
+        {
+            **response.model_dump(),
+            "dataset": dataset_response.model_dump(),
+            "source_summary": source_summary.model_dump(),
+            "source_evidence": [
+                evidence.model_dump() for evidence in source_evidence
+            ],
+        }
+    )
 
     return SourceBackedPredictionResponse(
         prediction=response,
-        dataset=_dataset_response(dataset),
-        source_summary=SourceBackedPredictionSummary(
-            ingested_source_count=len(results),
-            snapshot_count=sum(1 for result in results if result.snapshot is not None),
-            normalized_fact_count=len(normalized_facts),
-            validated_fact_count=len(validated_facts),
-            conflict_count=dataset.conflict_count,
-        ),
+        dataset=dataset_response,
+        source_summary=source_summary,
+        source_evidence=source_evidence,
     )
+
+
+@router.get("/{prediction_id}/record", response_model=PredictionRecordResponse)
+async def get_prediction_record(prediction_id: str, request: Request):
+    record = _prediction_repository(request).get(prediction_id)
+    if record is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Match prediction not found",
+        )
+
+    return _prediction_record_response(record)
 
 
 @router.get("/{prediction_id}", response_model=PredictionResponse)
@@ -235,6 +304,55 @@ def _prediction_response(prediction, *, prediction_id: str) -> PredictionRespons
             for scoreline in prediction.top_scorelines
         ],
         confidence_level=prediction.confidence_level,
+    )
+
+
+def _history_item_response(record: dict) -> PredictionHistoryItemResponse:
+    return PredictionHistoryItemResponse(
+        id=record["id"],
+        home_team=record["home_team"],
+        away_team=record["away_team"],
+        probabilities=record["probabilities"],
+        confidence_level=record["confidence_level"],
+        source_summary=(
+            SourceBackedPredictionSummary(**record["source_summary"])
+            if record.get("source_summary")
+            else None
+        ),
+    )
+
+
+def _prediction_record_response(record: dict) -> PredictionRecordResponse:
+    return PredictionRecordResponse(
+        prediction=PredictionResponse(**record),
+        dataset=(
+            PredictionDatasetPayload(**record["dataset"])
+            if record.get("dataset")
+            else None
+        ),
+        source_summary=(
+            SourceBackedPredictionSummary(**record["source_summary"])
+            if record.get("source_summary")
+            else None
+        ),
+        source_evidence=[
+            SourceEvidenceResponse(**evidence)
+            for evidence in record.get("source_evidence", [])
+        ],
+    )
+
+
+def _source_evidence_response(result) -> SourceEvidenceResponse:
+    return SourceEvidenceResponse(
+        source_name=result.source_name,
+        category=result.category.value if result.category else None,
+        status=result.status.value,
+        snapshot_path=str(result.snapshot.path) if result.snapshot else None,
+        content_hash=result.snapshot.content_hash if result.snapshot else None,
+        item_count=result.item_count,
+        fact_count=len(result.facts),
+        match_count=len(result.matches),
+        message=result.message,
     )
 
 

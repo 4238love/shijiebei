@@ -16,6 +16,7 @@ export default function RootLayout({
       <body>
         <nav className="top-nav" aria-label="Primary navigation">
           <a href="/">Prediction</a>
+          <a href="/predictions">History</a>
           <a href="/sources">Sources</a>
           <a href="/backtests">Backtests</a>
           <a href="/weights">Weights</a>

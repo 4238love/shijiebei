@@ -66,6 +66,25 @@ def test_create_and_retrieve_match_prediction():
     assert retrieved.json() == created_body
 
 
+def test_list_predictions_returns_recent_saved_predictions():
+    client = TestClient(create_app())
+    first = client.post("/predictions", json=prediction_request()).json()
+    second_payload = prediction_request()
+    second_payload["dataset"]["home_team"] = "Argentina"
+    second_payload["dataset"]["away_team"] = "France"
+    second = client.post("/predictions", json=second_payload).json()
+
+    response = client.get("/predictions")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert [prediction["id"] for prediction in body["predictions"]] == [
+        second["id"],
+        first["id"],
+    ]
+    assert body["predictions"][0]["home_team"] == "Argentina"
+
+
 def test_retrieving_unknown_prediction_returns_404():
     client = TestClient(create_app())
 
@@ -163,3 +182,62 @@ def test_create_match_prediction_from_sources():
     ]
     assert body["source_summary"]["ingested_source_count"] == 2
     assert body["source_summary"]["validated_fact_count"] > 0
+    assert len(body["source_evidence"]) == 2
+    assert body["source_evidence"][0]["snapshot_path"]
+
+    detail_response = client.get(f"/predictions/{body['prediction']['id']}/record")
+
+    assert detail_response.status_code == 200
+    detail = detail_response.json()
+    assert detail["prediction"] == body["prediction"]
+    assert detail["dataset"] == body["dataset"]
+    assert detail["source_summary"] == body["source_summary"]
+    assert detail["source_evidence"] == body["source_evidence"]
+
+
+def test_list_predictions_includes_source_summary_for_source_backed_runs():
+    tmp_path = workspace_tmp()
+    config_path = tmp_path / "sources.json"
+    ranking_url = "https://data-source.example/ranking.html"
+    config_path.write_text(
+        """
+        {
+          "ranking": [
+            {
+              "name": "ranking-source",
+              "url": "https://data-source.example/ranking.html",
+              "priority": 1,
+              "adapter": "webpage"
+            }
+          ]
+        }
+        """,
+        encoding="utf-8",
+    )
+    client = TestClient(
+        create_app(
+            source_config_path=config_path,
+            source_snapshot_dir=tmp_path / "snapshots",
+            source_http_client=UrlMappedHttpClient(
+                {
+                    ranking_url: b"<html><body>1 Brazil 2082 12 Croatia 1900</body></html>",
+                }
+            ),
+        )
+    )
+    client.post(
+        "/predictions/from-sources",
+        json={
+            "home_team": "Brazil",
+            "away_team": "Croatia",
+            "category": "ranking",
+            "simulation_count": 1_000,
+            "seed": 20260614,
+        },
+    )
+
+    response = client.get("/predictions")
+
+    assert response.status_code == 200
+    item = response.json()["predictions"][0]
+    assert item["source_summary"]["ingested_source_count"] == 1

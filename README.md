@@ -12,6 +12,7 @@ Services:
 
 - Frontend: <http://localhost:13000>
 - Live source-backed prediction workbench: <http://localhost:13000>
+- Prediction history and evidence detail: <http://localhost:13000/predictions>
 - Source operations page: <http://localhost:13000/sources>
 - Methodology page: <http://localhost:13000/methodology>
 - Backend health: <http://localhost:8000/health>
@@ -86,5 +87,11 @@ The homepage includes the same flow behind a browser form. Choose home/away team
 
 - Browser route: `POST /api/predictions/from-sources`
 - Backend route: `POST /predictions/from-sources`
+
+Saved prediction records can be reviewed with their source-backed evidence:
+
+- Backend history route: `GET /predictions`
+- Backend detail route: `GET /predictions/{id}/record`
+- Frontend history route: `/predictions`
 
 FIFA, Transfermarkt, OddsPortal, OddsChecker, BBC, and Elo pages are configured as crawl targets; their HTML/dynamic parsers should be added as separate adapters instead of being called directly from the prediction button.

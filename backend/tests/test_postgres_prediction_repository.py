@@ -2,9 +2,10 @@ from app.prediction_repository import PostgresPredictionRepository
 
 
 class FakeCursor:
-    def __init__(self, fetchone_result=None):
+    def __init__(self, fetchone_result=None, fetchall_result=None):
         self.statements = []
         self.fetchone_result = fetchone_result
+        self.fetchall_result = fetchall_result or []
 
     def __enter__(self):
         return self
@@ -17,6 +18,9 @@ class FakeCursor:
 
     def fetchone(self):
         return self.fetchone_result
+
+    def fetchall(self):
+        return self.fetchall_result
 
 
 class FakeConnection:
@@ -71,6 +75,27 @@ def test_postgres_repository_retrieves_prediction_payload():
         "id": "prediction-1",
         "home_team": "Brazil",
     }
+
+
+def test_postgres_repository_lists_recent_prediction_payloads():
+    cursor = FakeCursor(
+        fetchall_result=[
+            ({"id": "prediction-2", "home_team": "Croatia"},),
+            ({"id": "prediction-1", "home_team": "Brazil"},),
+        ]
+    )
+    repository = PostgresPredictionRepository(
+        database_url="postgresql://prediction:test@postgres/prediction",
+        connect_factory=lambda: FakeConnection(cursor),
+    )
+
+    assert repository.list_recent(limit=2) == [
+        {"id": "prediction-2", "home_team": "Croatia"},
+        {"id": "prediction-1", "home_team": "Brazil"},
+    ]
+    statement, params = cursor.statements[0]
+    assert "order by created_at desc" in statement.lower()
+    assert params == (2,)
 
 
 def test_postgres_repository_returns_none_for_missing_prediction():

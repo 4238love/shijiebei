@@ -13,15 +13,22 @@ class PredictionRepository(Protocol):
     def get(self, prediction_id: str) -> dict | None:
         ...
 
+    def list_recent(self, limit: int = 20) -> list[dict]:
+        ...
+
 
 class InMemoryPredictionRepository:
     def __init__(self):
         self._predictions: dict[str, dict] = {}
+        self._order: list[str] = []
 
     def save(self, prediction: dict) -> str:
         prediction_id = prediction.get("id") or str(uuid4())
         saved_prediction = {"id": prediction_id, **prediction}
         self._predictions[prediction_id] = deepcopy(saved_prediction)
+        if prediction_id in self._order:
+            self._order.remove(prediction_id)
+        self._order.append(prediction_id)
         return prediction_id
 
     def get(self, prediction_id: str) -> dict | None:
@@ -29,6 +36,12 @@ class InMemoryPredictionRepository:
         if prediction is None:
             return None
         return deepcopy(prediction)
+
+    def list_recent(self, limit: int = 20) -> list[dict]:
+        return [
+            deepcopy(self._predictions[prediction_id])
+            for prediction_id in reversed(self._order[-limit:])
+        ]
 
 
 class PostgresPredictionRepository:
@@ -80,6 +93,22 @@ class PostgresPredictionRepository:
             return None
 
         return dict(row[0])
+
+    def list_recent(self, limit: int = 20) -> list[dict]:
+        with self._connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    select payload
+                    from predictions
+                    order by created_at desc
+                    limit %s
+                    """,
+                    (limit,),
+                )
+                rows = cursor.fetchall()
+
+        return [dict(row[0]) for row in rows]
 
     def _connect(self):
         if self.connect_factory is not None:

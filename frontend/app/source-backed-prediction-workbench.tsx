@@ -285,6 +285,13 @@ export function SourceBackedPredictionWorkbench({ backendReady }: Props) {
               </li>
             ))}
           </ol>
+
+          <a
+            className="evidence-link"
+            href={`/predictions/${prediction.prediction.id}`}
+          >
+            Open prediction evidence detail
+          </a>
         </>
       ) : (
         <p className="summary compact prediction-empty-state">
