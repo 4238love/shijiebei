@@ -7,6 +7,8 @@ from uuid import uuid4
 
 from app.prediction_engine import WeightVersion
 
+SUPPORTED_WEIGHT_RECOMMENDATION_PROVIDERS = {"deepseek", "gpt"}
+
 
 class WeightRecommendationStatus(StrEnum):
     PROPOSED = "proposed"
@@ -65,6 +67,9 @@ class WeightRecommendationRegistry:
         proposed_factors: dict[str, float],
         rationale: str,
     ) -> WeightRecommendation:
+        if provider_name not in SUPPORTED_WEIGHT_RECOMMENDATION_PROVIDERS:
+            raise ValueError("Only deepseek and gpt providers are supported")
+
         recommendation = WeightRecommendation(
             id=str(uuid4()),
             provider_name=provider_name,

@@ -69,11 +69,18 @@ async def create_weight_recommendation(
     payload: CreateWeightRecommendationRequest,
     request: Request,
 ):
-    recommendation = _registry(request).create_recommendation(
-        provider_name=payload.provider_name,
-        proposed_factors=payload.proposed_factors,
-        rationale=payload.rationale,
-    )
+    try:
+        recommendation = _registry(request).create_recommendation(
+            provider_name=payload.provider_name,
+            proposed_factors=payload.proposed_factors,
+            rationale=payload.rationale,
+        )
+    except ValueError as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(error),
+        ) from error
+
     return _recommendation_response(recommendation)
 
 

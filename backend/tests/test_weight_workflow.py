@@ -79,3 +79,20 @@ def test_recommendation_without_backtest_cannot_be_activated():
         assert str(error) == "backtest_reference is required"
     else:
         raise AssertionError("expected approval without backtest reference to fail")
+
+
+def test_unknown_provider_cannot_create_weight_recommendation():
+    registry = WeightRecommendationRegistry(
+        active_weight_version=WeightVersion(name="baseline", factors={})
+    )
+
+    try:
+        registry.create_recommendation(
+            provider_name="claude",
+            proposed_factors={"base_goal_rate": 1.5},
+            rationale="Unsupported model.",
+        )
+    except ValueError as error:
+        assert str(error) == "Only deepseek and gpt providers are supported"
+    else:
+        raise AssertionError("expected unsupported provider to be rejected")

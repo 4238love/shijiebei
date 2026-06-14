@@ -81,6 +81,22 @@ def test_approve_weight_recommendation_without_backtest_returns_400():
     assert response.json()["detail"] == "backtest_reference is required"
 
 
+def test_unknown_weight_recommendation_provider_is_rejected():
+    client = TestClient(create_app())
+
+    response = client.post(
+        "/weights/recommendations",
+        json={
+            "provider_name": "claude",
+            "proposed_factors": {"base_goal_rate": 1.5},
+            "rationale": "Unsupported provider should not enter review flow.",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Only deepseek and gpt providers are supported"
+
+
 def test_unknown_weight_recommendation_returns_404():
     client = TestClient(create_app())
 
