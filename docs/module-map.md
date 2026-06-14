@@ -6,7 +6,9 @@ This map summarizes the current implementation using the project glossary.
 
 - `docker-compose.yml` defines the Docker Compose web system: `frontend`, `backend`, and `postgres`.
 - `backend/app/main.py` creates the FastAPI app and mounts public API seams.
-- `frontend/app/page.tsx` renders the health and demo Match Prediction path.
+- `frontend/app/page.tsx` renders health status and mounts the live prediction workbench.
+- `frontend/app/source-backed-prediction-workbench.tsx` lets an operator pick teams/source scope and run source-backed predictions from the browser.
+- `frontend/app/api/predictions/from-sources/route.ts` proxies browser requests to backend `POST /predictions/from-sources`.
 - `frontend/app/methodology/page.tsx` renders the technical methodology page.
 
 ## Prediction path

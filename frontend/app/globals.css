@@ -159,6 +159,101 @@ h2 {
     rgba(10, 13, 28, 0.86);
 }
 
+.prediction-workbench {
+  grid-template-columns: minmax(0, 0.95fr) minmax(320px, 0.8fr);
+  overflow: hidden;
+  position: relative;
+}
+
+.prediction-workbench::before {
+  content: "";
+  position: absolute;
+  inset: -40% auto auto 58%;
+  width: 360px;
+  height: 360px;
+  border: 1px solid rgba(117, 240, 178, 0.2);
+  border-radius: 999px;
+  background:
+    radial-gradient(circle, rgba(117, 240, 178, 0.12), transparent 64%),
+    conic-gradient(from 120deg, transparent, rgba(231, 217, 111, 0.12), transparent);
+  filter: blur(1px);
+  pointer-events: none;
+}
+
+.prediction-copy,
+.prediction-form,
+.probability-grid,
+.prediction-source-summary,
+.dataset-grid,
+.scorelines,
+.prediction-empty-state,
+.source-ops-error {
+  position: relative;
+  z-index: 1;
+}
+
+.prediction-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.prediction-form label {
+  display: grid;
+  gap: 9px;
+}
+
+.prediction-form label:nth-child(3),
+.prediction-form button,
+.prediction-scope {
+  grid-column: 1 / -1;
+}
+
+.prediction-form input,
+.prediction-form select {
+  width: 100%;
+  min-height: 48px;
+  padding: 13px 15px;
+  border: 1px solid rgba(154, 165, 255, 0.28);
+  border-radius: 16px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.07);
+  font: inherit;
+  outline: none;
+}
+
+.prediction-form input:focus,
+.prediction-form select:focus {
+  border-color: rgba(231, 217, 111, 0.66);
+  box-shadow: 0 0 0 4px rgba(231, 217, 111, 0.08);
+}
+
+.prediction-form button {
+  min-height: 52px;
+  border: 1px solid rgba(231, 217, 111, 0.56);
+  border-radius: 999px;
+  color: #060711;
+  background:
+    linear-gradient(90deg, var(--accent), #75f0b2);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+  box-shadow: 0 18px 42px rgba(117, 240, 178, 0.16);
+}
+
+.prediction-form button:disabled {
+  cursor: wait;
+  filter: grayscale(0.6);
+  opacity: 0.58;
+}
+
+.prediction-scope {
+  margin: 0;
+}
+
 .probability-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -196,6 +291,42 @@ h2 {
   border-radius: 16px;
   color: var(--accent);
   background: rgba(255, 255, 255, 0.035);
+}
+
+.prediction-source-summary,
+.dataset-grid {
+  grid-column: 1 / -1;
+}
+
+.dataset-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 0.72fr;
+  gap: 12px;
+}
+
+.dataset-grid article {
+  display: grid;
+  gap: 8px;
+  padding: 18px;
+  border: 1px solid rgba(154, 165, 255, 0.18);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.dataset-grid strong {
+  color: var(--accent);
+  font-size: 2.2rem;
+  line-height: 1;
+}
+
+.dataset-grid span {
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.prediction-empty-state {
+  grid-column: 1 / -1;
+  margin-top: 0;
 }
 
 .method-grid {
@@ -534,6 +665,9 @@ h2 {
 
   .status-grid,
   .prediction-panel,
+  .prediction-workbench,
+  .prediction-form,
+  .dataset-grid,
   .probability-grid,
   .scorelines,
   .method-grid,

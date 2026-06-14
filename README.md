@@ -11,6 +11,7 @@ docker compose up -d --build
 Services:
 
 - Frontend: <http://localhost:13000>
+- Live source-backed prediction workbench: <http://localhost:13000>
 - Source operations page: <http://localhost:13000/sources>
 - Methodology page: <http://localhost:13000/methodology>
 - Backend health: <http://localhost:8000/health>
@@ -80,5 +81,10 @@ $body = @{
 } | ConvertTo-Json
 Invoke-RestMethod -Method Post -Uri http://localhost:8000/predictions/from-sources -ContentType "application/json" -Body $body
 ```
+
+The homepage includes the same flow behind a browser form. Choose home/away teams and source scope, then run the crawl-and-predict path through the Next.js proxy route:
+
+- Browser route: `POST /api/predictions/from-sources`
+- Backend route: `POST /predictions/from-sources`
 
 FIFA, Transfermarkt, OddsPortal, OddsChecker, BBC, and Elo pages are configured as crawl targets; their HTML/dynamic parsers should be added as separate adapters instead of being called directly from the prediction button.
