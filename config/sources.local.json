@@ -70,16 +70,23 @@
       "notes": "Dedicated World Cup injury and suspension index; adapter follows article links and parses team Out/Doubtful/Suspended sections."
     },
     {
+      "name": "transfermarkt-world-cup-2026-injuries",
+      "url": "https://www.transfermarkt.com/world-cup-2026/verletztespieler/pokalwettbewerb/WM26",
+      "priority": 2,
+      "adapter": "webpage",
+      "notes": "Secondary injury and suspension crawl target for cross-checking Sports Mole and news-feed availability signals."
+    },
+    {
       "name": "bbc-world-cup-football-injuries",
       "url": "https://www.bbc.com/sport/football/world-cup",
-      "priority": 2,
+      "priority": 3,
       "adapter": "webpage",
       "notes": "Accessible news feed used for first-wave injury signal extraction."
     },
     {
       "name": "fifa-world-cup-news-injuries",
       "url": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026/news",
-      "priority": 3,
+      "priority": 4,
       "adapter": "webpage",
       "notes": "Official news fallback for availability reports."
     }
@@ -98,6 +105,13 @@
       "priority": 2,
       "adapter": "webpage",
       "notes": "Secondary market comparison source with static decimal odds fragments."
+    },
+    {
+      "name": "oddschecker-world-cup",
+      "url": "https://www.oddschecker.com/football/world-cup",
+      "priority": 3,
+      "adapter": "webpage",
+      "notes": "Additional odds comparison website for cross-checking market price samples."
     }
   ],
   "news_sentiment": [
@@ -130,6 +144,13 @@
       "priority": 2,
       "adapter": "webpage",
       "notes": "Official team list fallback."
+    },
+    {
+      "name": "transfermarkt-world-cup-2026-squads",
+      "url": "https://www.transfermarkt.com/world-cup-2026/teilnehmer/pokalwettbewerb/WM26",
+      "priority": 3,
+      "adapter": "webpage",
+      "notes": "Secondary squad/player-level crawl target for player dataset cross-checking."
     }
   ]
 }

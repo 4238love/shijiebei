@@ -17,3 +17,18 @@ def test_local_source_config_uses_real_urls_not_placeholders():
         assert "example" not in source.url
         assert source.name
         assert source.priority >= 1
+
+
+def test_local_source_config_includes_committed_cross_check_websites():
+    config = load_source_catalog_config(Path("config/sources.local.json"))
+    urls = " ".join(source.url for source in config.sources)
+
+    for hostname in [
+        "fifa.com",
+        "transfermarkt.com",
+        "oddsportal.com",
+        "oddschecker.com",
+        "bbc.com",
+        "eloratings.net",
+    ]:
+        assert hostname in urls

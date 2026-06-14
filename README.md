@@ -97,6 +97,9 @@ Sports Mole injury sources use a dedicated crawler: the adapter snapshots the
 World Cup injury index, follows article links, then parses team
 `Out`/`Doubtful`/`Suspended` sections into `injury_availability` and
 `team_unavailable_player_count` facts.
+`config/sources.local.json` also includes Transfermarkt as a secondary injury
+target so availability signals can be checked against Sports Mole, BBC, and
+FIFA news pages.
 
 Run a category validation pass to ingest all matching sources and cross-check facts by source priority:
 
@@ -135,6 +138,8 @@ raise attack index, and reduce defensive weakness before Monte Carlo simulation.
 BetExplorer-style static match rows with `data-odd` 1X2 prices are parsed into
 home/draw/away facts, so captured marketplace HTML can produce team-scoped odds
 instead of only loose market price samples.
+OddsChecker is configured as an additional odds comparison crawl target for
+market-price cross-checking.
 
 Team-scoped injury segments such as `Brazil: Neymar doubtful, Vinicius Junior
 suspended` emit `team_unavailable_player_count` facts. Those facts reduce the
@@ -152,6 +157,8 @@ counts, the Prediction Dataset applies a small squad-depth adjustment.
 The `espn_team_rosters` adapter can start from ESPN's team index, discover team
 IDs, fetch each roster JSON endpoint, and emit player-level facts without
 manually listing one squad page per team.
+Transfermarkt's World Cup squad page is configured as a secondary player-data
+target for squad/player cross-checking.
 Delete the matching file under `.scratch/source-snapshots/` when an operator
 needs to force an immediate ESPN discovery refresh.
 
