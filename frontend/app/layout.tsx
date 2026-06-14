@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "World Cup Prediction Tool",
-  description: "DeepSeek/GPT assisted football prediction methodology dashboard.",
+  title: "世界杯预测工具",
+  description: "由 DeepSeek/GPT 辅助的足球预测方法论看板。",
 };
 
 export default function RootLayout({
@@ -12,17 +12,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="zh-CN">
       <body>
-        <nav className="top-nav" aria-label="Primary navigation">
-          <a href="/">Prediction</a>
-          <a href="/predictions">History</a>
-          <a href="/jobs">Jobs</a>
-          <a href="/sources">Sources</a>
-          <a href="/backtests">Backtests</a>
-          <a href="/weights">Weights</a>
-          <a href="/reports">Reports</a>
-          <a href="/methodology">Methodology</a>
+        <nav className="top-nav" aria-label="主导航">
+          <a href="/">预测</a>
+          <a href="/predictions">历史</a>
+          <a href="/jobs">任务</a>
+          <a href="/sources">数据源</a>
+          <a href="/backtests">回测</a>
+          <a href="/weights">权重</a>
+          <a href="/reports">报告</a>
+          <a href="/methodology">方法论</a>
         </nav>
         {children}
       </body>

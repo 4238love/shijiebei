@@ -20,12 +20,11 @@ export default async function JobsPage() {
   return (
     <main className="shell">
       <section className="hero">
-        <p className="eyebrow">Pipeline jobs</p>
-        <h1>Source automation control room</h1>
+        <p className="eyebrow">流水线任务</p>
+        <h1>数据源自动化控制台</h1>
         <p className="summary">
-          Run and audit the operational loop: ingest configured sources,
-          validate normalized facts, then create a source-backed prediction
-          record with saved evidence.
+          运行并审计完整操作闭环：采集已配置数据源、验证规范化事实，
+          再创建带证据保存的预测记录。
         </p>
       </section>
 
@@ -33,9 +32,9 @@ export default async function JobsPage() {
         <JobsDashboard initialJobs={jobs} />
       ) : (
         <section className="prediction-panel">
-          <h2>Jobs API unavailable</h2>
+          <h2>任务 API 不可用</h2>
           <p className="summary compact">
-            Start the backend service to inspect or run pipeline jobs.
+            启动后端服务后才能查看或运行流水线任务。
           </p>
         </section>
       )}

@@ -1,6 +1,12 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
+import {
+  canonicalTeamName,
+  localizeTeamNamesInText,
+  matchLabel,
+  teamLabel,
+} from "./team-labels";
 
 type Scoreline = {
   home_goals: number;
@@ -65,14 +71,19 @@ type SourceCategoryOption = {
 };
 
 const SOURCE_CATEGORY_OPTIONS: SourceCategoryOption[] = [
-  { value: "", label: "All configured sources" },
-  { value: "ranking", label: "Ranking" },
-  { value: "team_form", label: "Team form" },
-  { value: "injury", label: "Injury" },
-  { value: "odds", label: "Odds" },
-  { value: "news_sentiment", label: "News sentiment" },
-  { value: "player", label: "Player data" },
-  { value: "schedule", label: "Schedule" },
+  { value: "", label: "全部已配置数据源" },
+  { value: "ranking", label: "排名" },
+  { value: "team_form", label: "球队状态" },
+  { value: "injury", label: "伤停" },
+  { value: "odds", label: "赔率" },
+  { value: "news_sentiment", label: "新闻情绪" },
+  { value: "player", label: "球员数据" },
+  { value: "schedule", label: "赛程" },
+];
+
+const AI_REPORT_PROVIDER_OPTIONS = [
+  { value: "gpt", label: "GPT" },
+  { value: "deepseek", label: "DeepSeek" },
 ];
 
 type Props = {
@@ -80,8 +91,8 @@ type Props = {
 };
 
 export function SourceBackedPredictionWorkbench({ backendReady }: Props) {
-  const [homeTeam, setHomeTeam] = useState("Brazil");
-  const [awayTeam, setAwayTeam] = useState("Croatia");
+  const [homeTeam, setHomeTeam] = useState(teamLabel("Brazil"));
+  const [awayTeam, setAwayTeam] = useState(teamLabel("Croatia"));
   const [category, setCategory] = useState("");
   const [simulationCount, setSimulationCount] = useState(1000);
   const [generateAIReport, setGenerateAIReport] = useState(false);
@@ -94,7 +105,7 @@ export function SourceBackedPredictionWorkbench({ backendReady }: Props) {
   const selectedCategoryLabel = useMemo(
     () =>
       SOURCE_CATEGORY_OPTIONS.find((option) => option.value === category)?.label ??
-      "Custom source set",
+      "自定义数据源集合",
     [category],
   );
 
@@ -107,8 +118,10 @@ export function SourceBackedPredictionWorkbench({ backendReady }: Props) {
       const trimmedHomeTeam = homeTeam.trim();
       const trimmedAwayTeam = awayTeam.trim();
       if (!trimmedHomeTeam || !trimmedAwayTeam) {
-        throw new Error("Both team names are required.");
+        throw new Error("主队和客队名称都必须填写。");
       }
+      const canonicalHomeTeam = canonicalTeamName(trimmedHomeTeam);
+      const canonicalAwayTeam = canonicalTeamName(trimmedAwayTeam);
 
       const response = await fetch("/api/predictions/from-sources", {
         method: "POST",
@@ -116,8 +129,8 @@ export function SourceBackedPredictionWorkbench({ backendReady }: Props) {
           "content-type": "application/json",
         },
         body: JSON.stringify({
-          home_team: trimmedHomeTeam,
-          away_team: trimmedAwayTeam,
+          home_team: canonicalHomeTeam,
+          away_team: canonicalAwayTeam,
           category: category || undefined,
           simulation_count: simulationCount,
           seed: 20260614,
@@ -128,7 +141,7 @@ export function SourceBackedPredictionWorkbench({ backendReady }: Props) {
 
       if (!response.ok) {
         const message = await response.text();
-        throw new Error(message || `Prediction failed with HTTP ${response.status}`);
+        throw new Error(message || `预测失败，HTTP 状态码 ${response.status}`);
       }
 
       setPrediction((await response.json()) as SourceBackedPredictionPayload);
@@ -136,7 +149,7 @@ export function SourceBackedPredictionWorkbench({ backendReady }: Props) {
       setError(
         caughtError instanceof Error
           ? caughtError.message
-          : "Source-backed prediction failed.",
+          : "基于数据源的预测失败。",
       );
     } finally {
       setIsRunning(false);
@@ -146,26 +159,27 @@ export function SourceBackedPredictionWorkbench({ backendReady }: Props) {
   return (
     <section
       className="prediction-panel prediction-workbench"
-      aria-label="Source-backed match prediction"
+      aria-label="基于数据源的比赛预测"
     >
       <div className="prediction-copy">
-        <p className="eyebrow">Live source-backed prediction</p>
+        <p className="eyebrow">实时数据源预测</p>
         <h2>
           {prediction
-            ? `${prediction.prediction.home_team} vs ${prediction.prediction.away_team}`
-            : "Choose teams, then crawl sources"}
+            ? matchLabel(
+                prediction.prediction.home_team,
+                prediction.prediction.away_team,
+              )
+            : "选择球队，然后抓取数据源"}
         </h2>
         <p className="summary compact">
-          This button validates configured web sources, builds a Prediction
-          Dataset from Validated Facts, then runs the Monte Carlo Prediction
-          Engine. DeepSeek/GPT stays reserved for reports and weight
-          recommendations.
+          这个流程会验证已配置的数据源，用已验证事实构建预测数据集，
+          然后运行蒙特卡洛预测引擎。DeepSeek/GPT 只用于报告和权重建议。
         </p>
       </div>
 
       <form className="prediction-form" onSubmit={runPrediction}>
         <label>
-          <span className="label">Home team</span>
+          <span className="label">主队</span>
           <input
             value={homeTeam}
             onChange={(event) => setHomeTeam(event.target.value)}
@@ -173,7 +187,7 @@ export function SourceBackedPredictionWorkbench({ backendReady }: Props) {
           />
         </label>
         <label>
-          <span className="label">Away team</span>
+          <span className="label">客队</span>
           <input
             value={awayTeam}
             onChange={(event) => setAwayTeam(event.target.value)}
@@ -181,7 +195,7 @@ export function SourceBackedPredictionWorkbench({ backendReady }: Props) {
           />
         </label>
         <label>
-          <span className="label">Source scope</span>
+          <span className="label">数据源范围</span>
           <select
             value={category}
             onChange={(event) => setCategory(event.target.value)}
@@ -194,7 +208,7 @@ export function SourceBackedPredictionWorkbench({ backendReady }: Props) {
           </select>
         </label>
         <label>
-          <span className="label">Simulations</span>
+          <span className="label">模拟次数</span>
           <input
             min={100}
             max={20000}
@@ -211,25 +225,38 @@ export function SourceBackedPredictionWorkbench({ backendReady }: Props) {
             checked={generateAIReport}
             onChange={(event) => setGenerateAIReport(event.target.checked)}
           />
-          <span>Generate GPT/DeepSeek report after prediction</span>
+          <span>预测后生成 GPT/DeepSeek 报告</span>
         </label>
-        <label>
-          <span className="label">AI report provider</span>
-          <select
-            value={aiReportProvider}
-            disabled={!generateAIReport}
-            onChange={(event) => setAIReportProvider(event.target.value)}
-          >
-            <option value="gpt">GPT</option>
-            <option value="deepseek">DeepSeek</option>
-          </select>
-        </label>
+        <fieldset className="ai-provider-field" disabled={!generateAIReport}>
+          <legend className="label">AI 报告模型</legend>
+          <div className="ai-provider-toggle">
+            {AI_REPORT_PROVIDER_OPTIONS.map((option) => (
+              <label
+                className={
+                  aiReportProvider === option.value
+                    ? "ai-provider-option selected"
+                    : "ai-provider-option"
+                }
+                key={option.value}
+              >
+                <input
+                  checked={aiReportProvider === option.value}
+                  name="ai-report-provider"
+                  onChange={() => setAIReportProvider(option.value)}
+                  type="radio"
+                  value={option.value}
+                />
+                <span>{option.label}</span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
         <button disabled={!backendReady || isRunning} type="submit">
-          {isRunning ? "Crawling and predicting" : "Run source prediction"}
+          {isRunning ? "正在抓取并预测" : "运行数据源预测"}
         </button>
         <p className="summary compact prediction-scope">
-          Scope: {selectedCategoryLabel}. Full source runs can take longer
-          because snapshots are captured before probabilities are produced.
+          范围：{selectedCategoryLabel}。全量数据源会先采集快照再生成概率，
+          因此耗时更长。
         </p>
       </form>
 
@@ -239,82 +266,82 @@ export function SourceBackedPredictionWorkbench({ backendReady }: Props) {
         <>
           <div className="probability-grid">
             <div>
-              <p className="label">Home win</p>
+              <p className="label">主胜</p>
               <strong>
                 {formatPercent(prediction.prediction.probabilities.home_win)}
               </strong>
             </div>
             <div>
-              <p className="label">Draw</p>
+              <p className="label">平局</p>
               <strong>{formatPercent(prediction.prediction.probabilities.draw)}</strong>
             </div>
             <div>
-              <p className="label">Away win</p>
+              <p className="label">客胜</p>
               <strong>
                 {formatPercent(prediction.prediction.probabilities.away_win)}
               </strong>
             </div>
             <div>
-              <p className="label">Confidence</p>
+              <p className="label">置信等级</p>
               <strong>{prediction.prediction.confidence_level}</strong>
             </div>
           </div>
 
           <div className="source-ops-summary prediction-source-summary">
             <article>
-              <p className="label">Sources</p>
+              <p className="label">数据源</p>
               <strong>{prediction.source_summary.ingested_source_count}</strong>
             </article>
             <article>
-              <p className="label">Snapshots</p>
+              <p className="label">快照</p>
               <strong>{prediction.source_summary.snapshot_count}</strong>
             </article>
             <article>
-              <p className="label">Facts</p>
+              <p className="label">事实</p>
               <strong>{prediction.source_summary.normalized_fact_count}</strong>
             </article>
             <article>
-              <p className="label">Validated</p>
+              <p className="label">已验证</p>
               <strong>{prediction.source_summary.validated_fact_count}</strong>
             </article>
           </div>
 
           <div className="dataset-grid">
             <article>
-              <p className="label">{prediction.dataset.home_team}</p>
+              <p className="label">{teamLabel(prediction.dataset.home_team)}</p>
               <strong>{prediction.dataset.home.attack_index.toFixed(3)}</strong>
-              <span>attack index</span>
+              <span>进攻指数</span>
               <span>
-                {prediction.dataset.home.defense_weakness.toFixed(3)} defense
-                weakness
+                {prediction.dataset.home.defense_weakness.toFixed(3)} 防守弱点
               </span>
             </article>
             <article>
-              <p className="label">{prediction.dataset.away_team}</p>
+              <p className="label">{teamLabel(prediction.dataset.away_team)}</p>
               <strong>{prediction.dataset.away.attack_index.toFixed(3)}</strong>
-              <span>attack index</span>
+              <span>进攻指数</span>
               <span>
-                {prediction.dataset.away.defense_weakness.toFixed(3)} defense
-                weakness
+                {prediction.dataset.away.defense_weakness.toFixed(3)} 防守弱点
               </span>
             </article>
             <article>
-              <p className="label">Conflict penalty</p>
+              <p className="label">冲突惩罚</p>
               <strong>{prediction.dataset.conflict_count}</strong>
-              <span>feeds Confidence Level</span>
+              <span>影响置信等级</span>
             </article>
           </div>
 
           {prediction.ai_report ? (
             <div className="source-category">
               <div className="source-category-header">
-                <p className="label">AI report</p>
+                <p className="label">AI 报告</p>
                 <span>
                   {prediction.ai_report.provider_name} /{" "}
                   {prediction.ai_report.model_name}
                 </span>
               </div>
-              <p className="summary compact">{prediction.ai_report.content}</p>
+              <p className="summary compact">
+                {localizeTeamNamesInText(prediction.ai_report.content)}
+              </p>
             </div>
           ) : null}
 
@@ -335,13 +362,12 @@ export function SourceBackedPredictionWorkbench({ backendReady }: Props) {
             className="evidence-link"
             href={`/predictions/${prediction.prediction.id}`}
           >
-            Open prediction evidence detail
+            查看预测证据详情
           </a>
         </>
       ) : (
         <p className="summary compact prediction-empty-state">
-          Start with Ranking for a fast smoke test, or All configured sources for
-          the complete crawl-and-validate path.
+          可先选择“排名”进行快速冒烟测试，或选择“全部已配置数据源”运行完整抓取和验证流程。
         </p>
       )}
     </section>

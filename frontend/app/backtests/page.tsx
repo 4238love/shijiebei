@@ -70,43 +70,43 @@ export default async function BacktestsPage() {
   return (
     <main className="shell">
       <section className="hero">
-        <p className="eyebrow">Backtest Run</p>
-        <h1>Evidence before confidence</h1>
+        <p className="eyebrow">回测运行</p>
+        <h1>先有证据，再给置信度</h1>
         <p className="summary">
-          Backtests replay saved Match Predictions against actual results, using
-          the original weight version and conflict status context.
+          回测会用真实赛果重放已保存的比赛预测，并保留原始权重版本和数据冲突状态。
         </p>
       </section>
 
       {run ? (
         <section className="metric-board">
           <article className="metric-card wide-card">
-            <p className="label">Run id</p>
+            <p className="label">运行 ID</p>
             <h2>{run.id}</h2>
-            <p>Current demo run uses two cases and top-1 scoreline evaluation.</p>
+            <p>当前演示回测包含两个样本，并使用 Top-1 比分命中评估。</p>
           </article>
           <article className="metric-card">
-            <p className="label">Outcome hit rate</p>
+            <p className="label">赛果命中率</p>
             <strong>{percent(run.outcome_hit_rate)}</strong>
           </article>
           <article className="metric-card">
-            <p className="label">Scoreline hit rate</p>
+            <p className="label">比分命中率</p>
             <strong>{percent(run.scoreline_top_n_hit_rate)}</strong>
           </article>
           <article className="metric-card">
-            <p className="label">Brier score</p>
+            <p className="label">Brier 分数</p>
             <strong>{run.brier_score.toFixed(4)}</strong>
           </article>
           <article className="metric-card">
-            <p className="label">Log loss</p>
+            <p className="label">对数损失</p>
             <strong>{run.log_loss.toFixed(4)}</strong>
           </article>
           <article className="metric-card wide-card">
-            <p className="label">Conflict segments</p>
+            <p className="label">冲突分组</p>
             <div className="segment-list">
               {Object.entries(run.segments).map(([status, segment]) => (
                 <span key={status}>
-                  {status}: {segment.match_count} match, {percent(segment.outcome_hit_rate)}
+                  {statusLabel(status)}：{segment.match_count} 场，
+                  {percent(segment.outcome_hit_rate)}
                 </span>
               ))}
             </div>
@@ -114,10 +114,20 @@ export default async function BacktestsPage() {
         </section>
       ) : (
         <section className="prediction-panel">
-          <h2>Backtest API unavailable</h2>
-          <p className="summary compact">Start the backend service to create a demo run.</p>
+          <h2>回测 API 不可用</h2>
+          <p className="summary compact">启动后端服务后才能创建演示回测。</p>
         </section>
       )}
     </main>
   );
+}
+
+function statusLabel(status: string) {
+  const labels: Record<string, string> = {
+    confirmed: "已确认",
+    conflicting: "有冲突",
+    missing: "缺失",
+    stale: "过期",
+  };
+  return labels[status] ?? status;
 }
