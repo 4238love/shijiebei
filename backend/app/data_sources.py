@@ -476,14 +476,26 @@ def _http_get_webpage(http_client, url: str, *, timeout_seconds: int):
         ),
     }
     try:
-        return http_client.get(
+        response = http_client.get(
             url,
             timeout=timeout_seconds,
             headers=headers,
             follow_redirects=True,
         )
+        if _looks_like_aws_waf(response):
+            return http_client.get(url, timeout=timeout_seconds, follow_redirects=True)
+        return response
     except TypeError:
         return http_client.get(url, timeout=timeout_seconds)
+
+
+def _looks_like_aws_waf(response) -> bool:
+    content = getattr(response, "content", b"")
+    if isinstance(content, str):
+        content_bytes = content.encode("utf-8", errors="ignore")
+    else:
+        content_bytes = content
+    return b"awsWaf" in content_bytes or b"gokuProps" in content_bytes
 
 
 def _facts_from_webpage(
@@ -500,7 +512,7 @@ def _facts_from_webpage(
     if category == SourceCategory.NEWS_SENTIMENT:
         return _news_sentiment_facts(text, source_name=source_name)
     if category == SourceCategory.PLAYER:
-        return _player_facts(text, source_name=source_name)
+        return _player_facts(content, source_name=source_name)
     if category == SourceCategory.RANKING:
         return _ranking_facts(text, source_name=source_name)
 
@@ -579,7 +591,24 @@ def _injury_facts(text: str, *, source_name: str) -> list[NormalizedFact]:
             )
         )
 
-    return facts
+    if facts:
+        return facts
+
+    injury_signal_count = sum(
+        len(re.findall(term, text, flags=re.IGNORECASE))
+        for term in (r"\binjury\b", r"\binjuries\b", r"\binjured\b", r"\bdoubtful\b")
+    )
+    if injury_signal_count:
+        return [
+            NormalizedFact(
+                fact_type="injury_feed_signal",
+                entity_key=source_name,
+                value=injury_signal_count,
+                source_name=source_name,
+            )
+        ]
+
+    return []
 
 
 def _odds_facts(text: str, *, source_name: str) -> list[NormalizedFact]:
@@ -664,6 +693,11 @@ def _news_sentiment_facts(text: str, *, source_name: str) -> list[NormalizedFact
 
 
 def _player_facts(text: str, *, source_name: str) -> list[NormalizedFact]:
+    anchor_facts = _espn_player_anchor_facts(text, source_name=source_name)
+    if anchor_facts:
+        return anchor_facts
+
+    text = _html_to_text(text)
     squad_match = re.search(r"\b(?:squad|players?)\s*:\s*([^.;]+)", text, re.IGNORECASE)
     if not squad_match:
         return []
@@ -673,6 +707,30 @@ def _player_facts(text: str, *, source_name: str) -> list[NormalizedFact]:
         player_name = _clean_entity_name(raw_name)
         if not player_name:
             continue
+        facts.append(
+            NormalizedFact(
+                fact_type="player_presence",
+                entity_key=player_name,
+                value="listed",
+                source_name=source_name,
+            )
+        )
+
+    return facts
+
+
+def _espn_player_anchor_facts(content: str, *, source_name: str) -> list[NormalizedFact]:
+    pattern = re.compile(
+        r"<a\b[^>]*data-resource-id=[\"']AthleteName[\"'][^>]*>(.*?)</a>",
+        re.IGNORECASE | re.DOTALL,
+    )
+    facts: list[NormalizedFact] = []
+    seen: set[str] = set()
+    for match in pattern.finditer(content):
+        player_name = _clean_entity_name(_html_to_text(match.group(1)))
+        if not player_name or player_name in seen:
+            continue
+        seen.add(player_name)
         facts.append(
             NormalizedFact(
                 fact_type="player_presence",

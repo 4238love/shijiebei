@@ -49,11 +49,11 @@
   ],
   "injury": [
     {
-      "name": "transfermarkt-world-cup-2026-injuries",
-      "url": "https://www.transfermarkt.com/world-cup-2026/verletztespieler/pokalwettbewerb/WM26",
+      "name": "bbc-world-cup-football-injuries",
+      "url": "https://www.bbc.com/sport/football/world-cup",
       "priority": 1,
       "adapter": "webpage",
-      "notes": "Competition injury and absence material; page structure may require Playwright."
+      "notes": "Accessible news feed used for first-wave injury signal extraction."
     },
     {
       "name": "fifa-world-cup-news-injuries",
@@ -97,11 +97,11 @@
   ],
   "player": [
     {
-      "name": "transfermarkt-world-cup-2026-squads",
-      "url": "https://www.transfermarkt.com/world-cup-2026/teilnehmer/pokalwettbewerb/WM26",
+      "name": "espn-brazil-squad",
+      "url": "https://www.espn.com/soccer/team/squad/_/id/205/brazil",
       "priority": 1,
       "adapter": "webpage",
-      "notes": "Squad and player market/profile source; page structure may require Playwright."
+      "notes": "ESPN squad page used as first player-level extraction target."
     },
     {
       "name": "fifa-world-cup-teams",

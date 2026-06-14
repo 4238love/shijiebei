@@ -50,6 +50,19 @@ class RedirectRequiredHttpClient:
         return FakeResponse(b"<html><body>Brazil 1.85 Draw 3.40 Croatia 4.20</body></html>")
 
 
+class WafThenDefaultHttpClient:
+    def __init__(self):
+        self.calls = []
+
+    def get(self, url, timeout, headers=None, follow_redirects=False):
+        self.calls.append({"headers": headers, "follow_redirects": follow_redirects})
+        if headers:
+            return FakeResponse(b"<html><script>window.awsWafCookieDomainList=[]</script></html>")
+        return FakeResponse(
+            b'<html><body><a data-resource-id="AthleteName" href="/soccer/player/_/id/132948/neymar">Neymar</a></body></html>'
+        )
+
+
 def workspace_tmp() -> Path:
     path = Path(".test-output") / uuid4().hex
     path.mkdir(parents=True, exist_ok=True)
@@ -327,6 +340,24 @@ def test_webpage_adapter_saves_html_snapshot_and_extracts_injury_facts():
     assert result.facts[0].value == "doubtful"
 
 
+def test_webpage_adapter_extracts_injury_feed_signal_when_player_status_is_missing():
+    tmp_path = workspace_tmp()
+    result = HttpWebpageDataSourceAdapter(
+        source_name="bbc-world-cup-football-injuries",
+        url="https://www.bbc.com/sport/football/world-cup",
+        category=SourceCategory.INJURY,
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=FakeHttpClient(
+            b"<html><body>World Cup injury latest: two injury concerns before kickoff.</body></html>"
+        ),
+    ).ingest_snapshot()
+
+    assert result.item_count == 1
+    assert result.facts[0].fact_type == "injury_feed_signal"
+    assert result.facts[0].entity_key == "bbc-world-cup-football-injuries"
+    assert result.facts[0].value == 2
+
+
 def test_webpage_adapter_extracts_odds_news_sentiment_and_player_facts():
     tmp_path = workspace_tmp()
 
@@ -359,6 +390,41 @@ def test_webpage_adapter_extracts_odds_news_sentiment_and_player_facts():
     assert news_result.facts[0].value == "negative"
     assert player_result.facts[0].fact_type == "player_presence"
     assert player_result.facts[0].entity_key == "Neymar"
+
+
+def test_webpage_adapter_extracts_espn_squad_player_facts():
+    tmp_path = workspace_tmp()
+    result = HttpWebpageDataSourceAdapter(
+        source_name="espn-brazil-squad",
+        url="https://www.espn.com/soccer/team/squad/_/id/205/brazil",
+        category=SourceCategory.PLAYER,
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=FakeHttpClient(
+            b'<html><body><a data-resource-id="AthleteName" href="/soccer/player/_/id/132948/neymar">Neymar</a></body></html>'
+        ),
+    ).ingest_snapshot()
+
+    assert result.item_count == 1
+    assert result.facts[0].fact_type == "player_presence"
+    assert result.facts[0].entity_key == "Neymar"
+    assert result.facts[0].value == "listed"
+
+
+def test_webpage_adapter_retries_without_browser_headers_when_waf_page_is_returned():
+    tmp_path = workspace_tmp()
+    http_client = WafThenDefaultHttpClient()
+    result = HttpWebpageDataSourceAdapter(
+        source_name="espn-brazil-squad",
+        url="https://www.espn.com/soccer/team/squad/_/id/205/brazil",
+        category=SourceCategory.PLAYER,
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=http_client,
+    ).ingest_snapshot()
+
+    assert len(http_client.calls) == 2
+    assert http_client.calls[0]["headers"] is not None
+    assert http_client.calls[1]["headers"] is None
+    assert result.facts[0].entity_key == "Neymar"
 
 
 def test_webpage_adapter_follows_redirects_for_market_pages():
