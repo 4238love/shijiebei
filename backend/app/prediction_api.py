@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Any
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
@@ -98,11 +99,21 @@ class SourceEvidenceResponse(BaseModel):
     message: str | None
 
 
+class ValidatedFactResponse(BaseModel):
+    fact_type: str
+    entity_key: str
+    status: str
+    value: Any | None
+    sources: list[str]
+    conflicting_values: dict[str, list[str]] = Field(default_factory=dict)
+
+
 class SourceBackedPredictionResponse(BaseModel):
     prediction: PredictionResponse
     dataset: PredictionDatasetPayload
     source_summary: SourceBackedPredictionSummary
     source_evidence: list[SourceEvidenceResponse] = Field(default_factory=list)
+    validated_facts: list[ValidatedFactResponse] = Field(default_factory=list)
 
 
 class PredictionHistoryItemResponse(BaseModel):
@@ -123,6 +134,7 @@ class PredictionRecordResponse(BaseModel):
     dataset: PredictionDatasetPayload | None = None
     source_summary: SourceBackedPredictionSummary | None = None
     source_evidence: list[SourceEvidenceResponse] = Field(default_factory=list)
+    validated_facts: list[ValidatedFactResponse] = Field(default_factory=list)
 
 
 @router.get("", response_model=PredictionHistoryResponse)
@@ -205,6 +217,9 @@ async def create_prediction_from_sources(
         conflict_count=dataset.conflict_count,
     )
     source_evidence = [_source_evidence_response(result) for result in results]
+    validated_fact_responses = [
+        _validated_fact_response(fact) for fact in validated_facts
+    ]
     _prediction_repository(request).save(
         {
             **response.model_dump(),
@@ -212,6 +227,9 @@ async def create_prediction_from_sources(
             "source_summary": source_summary.model_dump(),
             "source_evidence": [
                 evidence.model_dump() for evidence in source_evidence
+            ],
+            "validated_facts": [
+                fact.model_dump() for fact in validated_fact_responses
             ],
         }
     )
@@ -221,6 +239,7 @@ async def create_prediction_from_sources(
         dataset=dataset_response,
         source_summary=source_summary,
         source_evidence=source_evidence,
+        validated_facts=validated_fact_responses,
     )
 
 
@@ -339,6 +358,10 @@ def _prediction_record_response(record: dict) -> PredictionRecordResponse:
             SourceEvidenceResponse(**evidence)
             for evidence in record.get("source_evidence", [])
         ],
+        validated_facts=[
+            ValidatedFactResponse(**fact)
+            for fact in record.get("validated_facts", [])
+        ],
     )
 
 
@@ -353,6 +376,19 @@ def _source_evidence_response(result) -> SourceEvidenceResponse:
         fact_count=len(result.facts),
         match_count=len(result.matches),
         message=result.message,
+    )
+
+
+def _validated_fact_response(fact: ValidatedFact) -> ValidatedFactResponse:
+    return ValidatedFactResponse(
+        fact_type=fact.fact_type,
+        entity_key=fact.entity_key,
+        status=fact.status.value,
+        value=fact.value,
+        sources=fact.sources,
+        conflicting_values={
+            str(value): sources for value, sources in fact.conflicting_values.items()
+        },
     )
 
 

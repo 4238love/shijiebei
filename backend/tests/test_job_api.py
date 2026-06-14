@@ -210,6 +210,8 @@ def test_prediction_job_creates_saved_prediction_record():
     assert detail["prediction"]["id"] == prediction_id
     assert detail["source_summary"]["ingested_source_count"] == 1
     assert detail["source_evidence"][0]["source_name"] == "ranking-source"
+    assert detail["validated_facts"]
+    assert detail["validated_facts"][0]["fact_type"] == "team_ranking_position"
 
 
 def test_running_unknown_job_returns_404():

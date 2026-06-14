@@ -55,11 +55,21 @@ type SourceEvidence = {
   message: string | null;
 };
 
+type ValidatedFact = {
+  fact_type: string;
+  entity_key: string;
+  status: string;
+  value: unknown;
+  sources: string[];
+  conflicting_values: Record<string, string[]>;
+};
+
 type PredictionRecord = {
   prediction: Prediction;
   dataset: PredictionDataset | null;
   source_summary: SourceSummary | null;
   source_evidence: SourceEvidence[];
+  validated_facts: ValidatedFact[];
 };
 
 type PageProps = {
@@ -105,6 +115,7 @@ export default async function PredictionDetailPage({ params }: PageProps) {
   }
 
   const { prediction, dataset, source_summary: sourceSummary } = record;
+  const validatedFacts = record.validated_facts ?? [];
 
   return (
     <main className="shell">
@@ -208,6 +219,36 @@ export default async function PredictionDetailPage({ params }: PageProps) {
 
       <section className="source-category">
         <div className="source-category-header">
+          <p className="label">Validated facts</p>
+          <span>{validatedFacts.length} records</span>
+        </div>
+        {validatedFacts.length ? (
+          <div className="evidence-grid">
+            {validatedFacts.slice(0, 24).map((fact) => (
+              <article
+                className="evidence-card"
+                key={`${fact.fact_type}-${fact.entity_key}-${formatFactValue(fact.value)}`}
+              >
+                <span className="source-pill source-pill-live">{fact.status}</span>
+                <h2>{fact.entity_key}</h2>
+                <p>{fact.fact_type.replaceAll("_", " ")}</p>
+                <p>Value: {formatFactValue(fact.value)}</p>
+                <p>Sources: {fact.sources.join(", ") || "none"}</p>
+                {Object.keys(fact.conflicting_values).length ? (
+                  <code>{JSON.stringify(fact.conflicting_values)}</code>
+                ) : null}
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className="summary compact">
+            This record has no persisted validated facts.
+          </p>
+        )}
+      </section>
+
+      <section className="source-category">
+        <div className="source-category-header">
           <p className="label">Source evidence</p>
           <span>{record.source_evidence.length} records</span>
         </div>
@@ -239,4 +280,14 @@ export default async function PredictionDetailPage({ params }: PageProps) {
       </section>
     </main>
   );
+}
+
+function formatFactValue(value: unknown) {
+  if (value === null || value === undefined) {
+    return "none";
+  }
+  if (typeof value === "object") {
+    return JSON.stringify(value);
+  }
+  return String(value);
 }

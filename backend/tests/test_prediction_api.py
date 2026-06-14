@@ -182,6 +182,8 @@ def test_create_match_prediction_from_sources():
     ]
     assert body["source_summary"]["ingested_source_count"] == 2
     assert body["source_summary"]["validated_fact_count"] > 0
+    assert body["validated_facts"]
+    assert body["validated_facts"][0]["fact_type"]
     assert len(body["source_evidence"]) == 2
     assert body["source_evidence"][0]["snapshot_path"]
 
@@ -193,6 +195,7 @@ def test_create_match_prediction_from_sources():
     assert detail["dataset"] == body["dataset"]
     assert detail["source_summary"] == body["source_summary"]
     assert detail["source_evidence"] == body["source_evidence"]
+    assert detail["validated_facts"] == body["validated_facts"]
 
 
 def test_create_match_prediction_from_odds_sources_uses_market_prices():

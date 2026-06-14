@@ -8,7 +8,7 @@ from uuid import uuid4
 from fastapi import APIRouter, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 
-from app.cross_source_validation import CrossSourceValidator, NormalizedFact
+from app.cross_source_validation import CrossSourceValidator, NormalizedFact, ValidatedFact
 from app.job_repository import JobRunRecord, JobRunRepository
 from app.job_runner import InMemoryJobRunner, JobDefinition, JobState
 from app.prediction_dataset_builder import build_prediction_dataset_from_validated_facts
@@ -229,6 +229,7 @@ def _create_source_backed_prediction_job(app) -> dict:
             "conflict_count": dataset.conflict_count,
         },
         "source_evidence": [_source_evidence(result) for result in results],
+        "validated_facts": [_validated_fact_payload(fact) for fact in validated_facts],
     }
     prediction_id = app.state.prediction_repository.save(record)
 
@@ -332,4 +333,17 @@ def _source_evidence(result) -> dict:
         "fact_count": len(result.facts),
         "match_count": len(result.matches),
         "message": result.message,
+    }
+
+
+def _validated_fact_payload(fact: ValidatedFact) -> dict:
+    return {
+        "fact_type": fact.fact_type,
+        "entity_key": fact.entity_key,
+        "status": fact.status.value,
+        "value": fact.value,
+        "sources": fact.sources,
+        "conflicting_values": {
+            str(value): sources for value, sources in fact.conflicting_values.items()
+        },
     }

@@ -106,6 +106,8 @@ Saved prediction records can be reviewed with their source-backed evidence:
 - Backend history route: `GET /predictions`
 - Backend detail route: `GET /predictions/{id}/record`
 - Frontend history route: `/predictions`
+- Frontend detail route: `/predictions/{id}` shows the saved Prediction
+  Dataset, Source Snapshot evidence, and persisted Validated Facts.
 
 Pipeline jobs can be inspected and run from the browser:
 
