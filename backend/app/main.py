@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -11,6 +12,7 @@ from app.health import router as health_router
 from app.job_api import create_job_runner, router as job_router
 from app.job_repository import JobRunRepository, default_job_run_repository
 from app.methodology_api import router as methodology_router
+from app.pipeline_scheduler import create_pipeline_scheduler
 from app.prediction_api import router as prediction_router
 from app.prediction_repository import PredictionRepository, default_prediction_repository
 from app.source_api import router as source_router
@@ -42,8 +44,18 @@ def create_app(
     source_config_path: Path | None = None,
     source_snapshot_dir: Path | None = None,
     source_http_client=None,
+    enable_scheduler: bool | None = None,
+    scheduler_factory=None,
 ) -> FastAPI:
-    app = FastAPI(title="World Cup Prediction Tool API")
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        app.state.pipeline_scheduler.start()
+        try:
+            yield
+        finally:
+            app.state.pipeline_scheduler.shutdown()
+
+    app = FastAPI(title="World Cup Prediction Tool API", lifespan=lifespan)
     app.state.prediction_repository = prediction_repository or default_prediction_repository()
     app.state.backtest_repository = backtest_repository or default_backtest_repository()
     app.state.ai_report_repository = (
@@ -61,6 +73,11 @@ def create_app(
     app.state.job_runner = create_job_runner(
         app,
         job_run_repository=job_run_repository or default_job_run_repository(),
+    )
+    app.state.pipeline_scheduler = create_pipeline_scheduler(
+        app.state.job_runner,
+        enabled=enable_scheduler,
+        scheduler_factory=scheduler_factory,
     )
 
     app.add_middleware(

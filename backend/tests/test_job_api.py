@@ -29,7 +29,12 @@ def workspace_tmp() -> Path:
     return path
 
 
-def configured_client(job_run_repository=None) -> TestClient:
+def configured_app(
+    *,
+    job_run_repository=None,
+    enable_scheduler=None,
+    scheduler_factory=None,
+):
     tmp_path = workspace_tmp()
     config_path = tmp_path / "sources.json"
     ranking_url = "https://data-source.example/ranking.html"
@@ -48,18 +53,57 @@ def configured_client(job_run_repository=None) -> TestClient:
         """,
         encoding="utf-8",
     )
-    return TestClient(
-        create_app(
-            source_config_path=config_path,
-            source_snapshot_dir=tmp_path / "snapshots",
-            source_http_client=UrlMappedHttpClient(
-                {
-                    ranking_url: b"<html><body>1 Brazil 2082 12 Croatia 1900</body></html>",
-                }
-            ),
-            job_run_repository=job_run_repository,
-        )
+    return create_app(
+        source_config_path=config_path,
+        source_snapshot_dir=tmp_path / "snapshots",
+        source_http_client=UrlMappedHttpClient(
+            {
+                ranking_url: b"<html><body>1 Brazil 2082 12 Croatia 1900</body></html>",
+            }
+        ),
+        job_run_repository=job_run_repository,
+        enable_scheduler=enable_scheduler,
+        scheduler_factory=scheduler_factory,
     )
+
+
+def configured_client(**kwargs) -> TestClient:
+    return TestClient(configured_app(**kwargs))
+
+
+class FakeScheduledJob:
+    def __init__(self, job_id: str):
+        self.id = job_id
+
+
+class FakeBackgroundScheduler:
+    def __init__(self):
+        self.jobs = []
+        self.running = False
+        self.shutdown_wait = None
+
+    def add_job(self, func, trigger, *, minutes, id, replace_existing, max_instances, coalesce):
+        self.jobs.append(
+            {
+                "func": func,
+                "trigger": trigger,
+                "minutes": minutes,
+                "id": id,
+                "replace_existing": replace_existing,
+                "max_instances": max_instances,
+                "coalesce": coalesce,
+            }
+        )
+
+    def start(self):
+        self.running = True
+
+    def shutdown(self, *, wait):
+        self.running = False
+        self.shutdown_wait = wait
+
+    def get_jobs(self):
+        return [FakeScheduledJob(job["id"]) for job in self.jobs]
 
 
 def test_jobs_endpoint_lists_registered_pipeline_jobs():
@@ -72,6 +116,12 @@ def test_jobs_endpoint_lists_registered_pipeline_jobs():
         "validate-sources",
         "create-source-backed-prediction",
     ]
+    assert body["scheduler"] == {
+        "enabled": False,
+        "running": False,
+        "job_count": 0,
+        "job_ids": [],
+    }
     assert body["recent_runs"] == []
 
 
@@ -118,6 +168,29 @@ def test_jobs_endpoint_reads_existing_run_repository_state():
     assert job["run_count"] == 1
     assert job["last_run"]["id"] == "existing-run"
     assert body["recent_runs"][0]["id"] == "existing-run"
+
+
+def test_jobs_endpoint_reports_running_scheduler_when_enabled():
+    fake_scheduler = FakeBackgroundScheduler()
+    app = configured_app(
+        enable_scheduler=True,
+        scheduler_factory=lambda: fake_scheduler,
+    )
+
+    with TestClient(app) as client:
+        response = client.get("/jobs")
+
+    assert response.status_code == 200
+    scheduler = response.json()["scheduler"]
+    assert scheduler["enabled"] is True
+    assert scheduler["running"] is True
+    assert scheduler["job_count"] == 3
+    assert scheduler["job_ids"] == [
+        "ingest-sources",
+        "validate-sources",
+        "create-source-backed-prediction",
+    ]
+    assert fake_scheduler.shutdown_wait is False
 
 
 def test_prediction_job_creates_saved_prediction_record():

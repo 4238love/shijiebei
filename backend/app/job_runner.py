@@ -37,6 +37,9 @@ class InMemoryJobRunner:
         self._definitions = {definition.job_id: definition for definition in definitions}
         self._run_repository = run_repository or InMemoryJobRunRepository()
 
+    def list_definitions(self) -> list[JobDefinition]:
+        return list(self._definitions.values())
+
     def list_states(self) -> list[JobState]:
         return [
             JobState(

@@ -102,4 +102,14 @@ Pipeline jobs can be inspected and run from the browser:
 - Frontend jobs route: `/jobs`
 - Registered jobs: `ingest-sources`, `validate-sources`, `create-source-backed-prediction`
 
+Manual runs are always available. Background interval scheduling is opt-in:
+
+```powershell
+$env:ENABLE_SCHEDULER = "true"
+docker compose up -d --build backend
+```
+
+When enabled, `/jobs` reports scheduler state and schedules each registered job
+on its configured target interval.
+
 FIFA, Transfermarkt, OddsPortal, OddsChecker, BBC, and Elo pages are configured as crawl targets; their HTML/dynamic parsers should be added as separate adapters instead of being called directly from the prediction button.

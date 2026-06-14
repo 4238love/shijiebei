@@ -20,9 +20,17 @@ type JobStatus = {
   last_run: JobRun | null;
 };
 
+type SchedulerStatus = {
+  enabled: boolean;
+  running: boolean;
+  job_count: number;
+  job_ids: string[];
+};
+
 export type JobsPayload = {
   jobs: JobStatus[];
   recent_runs: JobRun[];
+  scheduler: SchedulerStatus;
 };
 
 type Props = {
@@ -63,6 +71,22 @@ export function JobsDashboard({ initialJobs }: Props) {
 
   return (
     <>
+      <section className="prediction-panel">
+        <p className="label">Scheduler</p>
+        <h2>
+          {payload.scheduler.enabled
+            ? payload.scheduler.running
+              ? "Background scheduler running"
+              : "Background scheduler enabled but stopped"
+            : "Background scheduler disabled"}
+        </h2>
+        <p className="summary compact">
+          {payload.scheduler.enabled
+            ? `${payload.scheduler.job_count} scheduled jobs: ${payload.scheduler.job_ids.join(", ")}`
+            : "Set ENABLE_SCHEDULER=true before starting the backend to run pipeline jobs on their target intervals."}
+        </p>
+      </section>
+
       <section className="jobs-grid" aria-label="Pipeline jobs">
         {payload.jobs.map((job) => (
           <article className="job-card" key={job.job_id}>

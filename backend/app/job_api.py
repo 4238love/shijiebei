@@ -38,9 +38,17 @@ class JobStatusResponse(BaseModel):
     last_run: JobRunResponse | None = None
 
 
+class SchedulerStatusResponse(BaseModel):
+    enabled: bool
+    running: bool
+    job_count: int
+    job_ids: list[str]
+
+
 class JobsResponse(BaseModel):
     jobs: list[JobStatusResponse]
     recent_runs: list[JobRunResponse]
+    scheduler: SchedulerStatusResponse
 
 
 @router.get("", response_model=JobsResponse)
@@ -54,6 +62,7 @@ async def list_jobs(
         recent_runs=[
             _job_run_response(record) for record in runner.recent_runs(limit=limit)
         ],
+        scheduler=_scheduler_status_response(request.app.state.pipeline_scheduler),
     )
 
 
@@ -122,6 +131,16 @@ def _job_run_response(record: JobRunRecord) -> JobRunResponse:
         finished_at=record.finished_at,
         summary=record.summary,
         error=record.error,
+    )
+
+
+def _scheduler_status_response(scheduler) -> SchedulerStatusResponse:
+    status = scheduler.status()
+    return SchedulerStatusResponse(
+        enabled=status.enabled,
+        running=status.running,
+        job_count=status.job_count,
+        job_ids=status.job_ids,
     )
 
 
