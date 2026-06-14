@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from enum import StrEnum
+from typing import Protocol
 from uuid import uuid4
 
 from app.prediction_engine import WeightVersion
@@ -25,10 +26,37 @@ class WeightRecommendation:
     activated_version_name: str | None = None
 
 
+class WeightRecommendationRepository(Protocol):
+    def save_recommendation(self, recommendation: WeightRecommendation) -> None:
+        ...
+
+    def get_recommendation(
+        self, recommendation_id: str
+    ) -> WeightRecommendation | None:
+        ...
+
+    def save_active_weight_version(self, weight_version: WeightVersion) -> None:
+        ...
+
+    def get_active_weight_version(self) -> WeightVersion | None:
+        ...
+
+
 class WeightRecommendationRegistry:
-    def __init__(self, *, active_weight_version: WeightVersion):
-        self.active_weight_version = active_weight_version
+    def __init__(
+        self,
+        *,
+        active_weight_version: WeightVersion,
+        repository: WeightRecommendationRepository | None = None,
+    ):
+        self._repository = repository
+        stored_active = (
+            repository.get_active_weight_version() if repository is not None else None
+        )
+        self.active_weight_version = stored_active or active_weight_version
         self._recommendations: dict[str, WeightRecommendation] = {}
+        if repository is not None and stored_active is None:
+            repository.save_active_weight_version(active_weight_version)
 
     def create_recommendation(
         self,
@@ -45,6 +73,8 @@ class WeightRecommendationRegistry:
             status=WeightRecommendationStatus.PROPOSED,
         )
         self._recommendations[recommendation.id] = recommendation
+        if self._repository is not None:
+            self._repository.save_recommendation(recommendation)
         return recommendation
 
     def approve_recommendation(
@@ -73,10 +103,23 @@ class WeightRecommendationRegistry:
         )
         self._recommendations[recommendation_id] = approved
         self.active_weight_version = activated
+        if self._repository is not None:
+            self._repository.save_recommendation(approved)
+            self._repository.save_active_weight_version(activated)
         return activated
 
     def get_recommendation(self, recommendation_id: str) -> WeightRecommendation:
-        try:
-            return self._recommendations[recommendation_id]
-        except KeyError as error:
-            raise KeyError(f"Unknown weight recommendation: {recommendation_id}") from error
+        cached = self._recommendations.get(recommendation_id)
+        if cached is not None:
+            return cached
+
+        stored = (
+            self._repository.get_recommendation(recommendation_id)
+            if self._repository is not None
+            else None
+        )
+        if stored is not None:
+            self._recommendations[recommendation_id] = stored
+            return stored
+
+        raise KeyError(f"Unknown weight recommendation: {recommendation_id}")

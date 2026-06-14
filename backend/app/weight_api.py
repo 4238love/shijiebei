@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 from app.prediction_engine import WeightVersion
 from app.weights import (
     WeightRecommendation,
+    WeightRecommendationRepository,
     WeightRecommendationRegistry,
     WeightRecommendationStatus,
 )
@@ -41,12 +42,15 @@ class ApproveWeightRecommendationRequest(BaseModel):
     new_version_name: str
 
 
-def create_weight_registry() -> WeightRecommendationRegistry:
+def create_weight_registry(
+    repository: WeightRecommendationRepository | None = None,
+) -> WeightRecommendationRegistry:
     return WeightRecommendationRegistry(
         active_weight_version=WeightVersion(
             name="baseline",
             factors={"base_goal_rate": 1.35},
-        )
+        ),
+        repository=repository,
     )
 
 

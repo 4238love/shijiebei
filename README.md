@@ -18,8 +18,8 @@ Services:
 - PostgreSQL: `localhost:15432`
 
 Docker Compose runs the backend with PostgreSQL-backed repositories for Match
-Predictions and Backtest Runs, so created records survive backend container
-restarts.
+Predictions, Backtest Runs, Weight Recommendations, and the active Weight
+Version, so created records survive backend container restarts.
 
 ## Development checks
 

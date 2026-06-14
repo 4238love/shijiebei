@@ -43,6 +43,10 @@ This map summarizes the current implementation using the project glossary.
   - Owns Weight Recommendation and Weight Version review flow.
   - Recommendations remain inactive until reviewed with a backtest reference.
 
+- `backend/app/weight_repository.py`
+  - Owns the Weight Recommendation and active Weight Version repository seam.
+  - Provides in-memory storage for tests/local seams and PostgreSQL storage for Docker deployment.
+
 ## Evidence path
 
 - `backend/app/backtesting.py`
@@ -65,4 +69,4 @@ This map summarizes the current implementation using the project glossary.
 
 ## Known next deepening opportunity
 
-`PostgresPredictionRepository` and `PostgresBacktestRepository` persist serialized API payloads. Future deepening should add richer query seams for Prediction Dataset references, Weight Version references, and actual results instead of treating those records as opaque documents.
+`PostgresPredictionRepository`, `PostgresBacktestRepository`, and `PostgresWeightRepository` persist serialized API payloads. Future deepening should add richer query seams for Prediction Dataset references, Weight Version lineage, and actual results instead of treating those records as opaque documents.

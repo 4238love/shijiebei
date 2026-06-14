@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 
 from app.main import create_app
+from app.weight_repository import InMemoryWeightRepository
 
 
 def test_create_weight_recommendation_does_not_change_active_weight_version():
@@ -87,3 +88,37 @@ def test_unknown_weight_recommendation_returns_404():
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Weight recommendation not found"
+
+
+def test_weight_recommendation_repository_survives_app_recreation():
+    repository = InMemoryWeightRepository()
+    first_client = TestClient(create_app(weight_repository=repository))
+    recommendation = first_client.post(
+        "/weights/recommendations",
+        json={
+            "provider_name": "deepseek",
+            "proposed_factors": {"base_goal_rate": 1.42},
+            "rationale": "Reviewed backtest drift.",
+        },
+    ).json()
+
+    first_client.post(
+        f"/weights/recommendations/{recommendation['id']}/approve",
+        json={
+            "reviewer": "operator",
+            "backtest_reference": "backtest-run-002",
+            "new_version_name": "baseline-goal-rate-calibration",
+        },
+    )
+
+    second_client = TestClient(create_app(weight_repository=repository))
+
+    retrieved = second_client.get(f"/weights/recommendations/{recommendation['id']}")
+    active = second_client.get("/weights/active")
+
+    assert retrieved.status_code == 200
+    assert retrieved.json()["status"] == "approved"
+    assert active.json() == {
+        "name": "baseline-goal-rate-calibration",
+        "factors": {"base_goal_rate": 1.42},
+    }
