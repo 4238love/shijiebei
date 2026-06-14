@@ -264,6 +264,123 @@ class EspnScoreboardDataSourceAdapter:
         )
 
 
+class EspnTeamScheduleDiscoveryDataSourceAdapter:
+    max_team_schedules = 48
+
+    def __init__(
+        self,
+        *,
+        source_name: str,
+        url: str,
+        category: SourceCategory | None = SourceCategory.TEAM_FORM,
+        snapshot_dir: Path,
+        http_client=None,
+        timeout_seconds: int = 10,
+    ):
+        self.source_name = source_name
+        self.url = url
+        self.category = category
+        self.snapshot_dir = Path(snapshot_dir)
+        self.http_client = http_client
+        self.timeout_seconds = timeout_seconds
+
+    def ingest_team_form(self) -> SourceIngestionResult:
+        snapshot = self.fetch_snapshot()
+        payload = json.loads(snapshot.path.read_text(encoding="utf-8"))
+        matches: list[ScheduleMatch] = []
+        for schedule in payload.get("team_schedules", []):
+            matches.extend(
+                _schedule_matches_from_espn_scoreboard(
+                    schedule.get("payload", {}),
+                    source_name=self.source_name,
+                )
+            )
+        facts = tuple(
+            _team_form_facts_from_matches(
+                tuple(matches),
+                source_name=self.source_name,
+            )
+        )
+
+        return SourceIngestionResult(
+            source_name=self.source_name,
+            category=self.category,
+            status=SourceIngestionStatus.INGESTED,
+            item_count=len(payload.get("team_schedules", [])),
+            snapshot=snapshot,
+            matches=tuple(matches),
+            facts=facts,
+            message=_webpage_ingestion_message(facts),
+        )
+
+    def fetch_snapshot(self) -> SourceSnapshot:
+        team_index_response = _http_get_webpage(
+            self._http_client(),
+            self.url,
+            timeout_seconds=self.timeout_seconds,
+        )
+        team_index_response.raise_for_status()
+        team_index_payload = json.loads(_decode_http_content(team_index_response.content))
+        team_entries = _espn_team_entries_from_index(team_index_payload)
+
+        team_schedules: list[dict] = []
+        errors: list[dict[str, str]] = []
+        for team in team_entries[: self.max_team_schedules]:
+            schedule_url = _espn_team_schedule_url(self.url, team_id=team["id"])
+            try:
+                schedule_response = _http_get_webpage(
+                    self._http_client(),
+                    schedule_url,
+                    timeout_seconds=self.timeout_seconds,
+                )
+                schedule_response.raise_for_status()
+                team_schedules.append(
+                    {
+                        "team": team,
+                        "url": schedule_url,
+                        "payload": json.loads(_decode_http_content(schedule_response.content)),
+                    }
+                )
+            except Exception as error:
+                errors.append(
+                    {
+                        "team_id": team["id"],
+                        "team_name": team["name"],
+                        "url": schedule_url,
+                        "error": str(error),
+                    }
+                )
+
+        payload = {
+            "source_url": self.url,
+            "team_index": team_index_payload,
+            "team_count": len(team_entries),
+            "team_schedules": team_schedules,
+            "errors": errors,
+        }
+        content = json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")
+        content_hash = sha256(content).hexdigest()
+        self.snapshot_dir.mkdir(parents=True, exist_ok=True)
+        snapshot_path = (
+            self.snapshot_dir / f"{_safe_name(self.source_name)}-{content_hash[:12]}.json"
+        )
+        snapshot_path.write_bytes(content)
+
+        return SourceSnapshot(
+            source_name=self.source_name,
+            path=snapshot_path,
+            content_hash=content_hash,
+        )
+
+    def _http_client(self):
+        if self.http_client is not None:
+            return self.http_client
+
+        import httpx
+
+        return httpx
+
+
 class HttpWebpageDataSourceAdapter:
     def __init__(
         self,
@@ -572,6 +689,36 @@ def _schedule_matches_from_espn_scoreboard(
         )
 
     return matches
+
+
+def _espn_team_entries_from_index(payload: dict) -> list[dict[str, str]]:
+    teams: list[dict[str, str]] = []
+    seen_ids: set[str] = set()
+    for sport in payload.get("sports", []):
+        for league in sport.get("leagues", []):
+            for item in league.get("teams", []):
+                team = item.get("team", {})
+                team_id = str(team.get("id") or "").strip()
+                team_name = (
+                    team.get("displayName")
+                    or team.get("shortDisplayName")
+                    or team.get("name")
+                    or team.get("abbreviation")
+                    or ""
+                )
+                team_name = _clean_entity_name(str(team_name))
+                if not team_id or not team_name or team_id in seen_ids:
+                    continue
+                seen_ids.add(team_id)
+                teams.append({"id": team_id, "name": team_name})
+
+    return teams
+
+
+def _espn_team_schedule_url(teams_url: str, *, team_id: str) -> str:
+    if re.search(r"/teams(?:\?.*)?$", teams_url):
+        return re.sub(r"/teams(?:\?.*)?$", f"/teams/{team_id}/schedule", teams_url)
+    return urljoin(teams_url.rstrip("/") + "/", f"{team_id}/schedule")
 
 
 def _facts_from_espn_matches(

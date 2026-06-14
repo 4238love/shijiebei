@@ -31,11 +31,11 @@
       "notes": "Recent event and result material for form extraction."
     },
     {
-      "name": "espn-brazil-team-schedule",
-      "url": "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/teams/205/schedule",
+      "name": "espn-world-cup-team-schedules",
+      "url": "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/teams",
       "priority": 2,
-      "adapter": "espn_scoreboard",
-      "notes": "Team schedule endpoint with completed Brazil group-stage results, used for recent form extraction."
+      "adapter": "espn_team_schedules",
+      "notes": "Discovers World Cup team IDs from ESPN, fetches each team schedule, and extracts latest completed match form."
     },
     {
       "name": "world-football-elo",

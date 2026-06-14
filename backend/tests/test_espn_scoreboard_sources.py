@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from app.data_sources import (
     EspnScoreboardDataSourceAdapter,
+    EspnTeamScheduleDiscoveryDataSourceAdapter,
     HttpWebpageDataSourceAdapter,
     SportsMoleInjuryDataSourceAdapter,
     SourceCategory,
@@ -480,6 +481,83 @@ def test_espn_scoreboard_team_form_keeps_latest_completed_match_per_team():
     assert ("team_match_goals_for", 1) in brazil_facts
     assert ("team_match_result", "draw") in brazil_facts
     assert ("team_match_goals_for", 2) not in brazil_facts
+
+
+def test_espn_team_schedule_discovery_fetches_team_schedules_from_team_index():
+    tmp_path = workspace_tmp()
+    teams_url = "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/teams"
+    brazil_schedule_url = "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/teams/205/schedule"
+    morocco_schedule_url = "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/teams/2869/schedule"
+    teams_payload = {
+        "sports": [
+            {
+                "leagues": [
+                    {
+                        "teams": [
+                            {"team": {"id": "205", "displayName": "Brazil"}},
+                            {"team": {"id": "2869", "displayName": "Morocco"}},
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+    schedule_payload = {
+        "events": [
+            {
+                "id": "760419",
+                "date": "2026-06-13T22:00Z",
+                "competitions": [
+                    {
+                        "status": {"type": {"description": "Full Time"}},
+                        "competitors": [
+                            {
+                                "homeAway": "home",
+                                "team": {"displayName": "Brazil"},
+                                "score": {"displayValue": "1"},
+                            },
+                            {
+                                "homeAway": "away",
+                                "team": {"displayName": "Morocco"},
+                                "score": {"displayValue": "1"},
+                            },
+                        ],
+                    }
+                ],
+            }
+        ]
+    }
+    http_client = UrlMappedHttpClient(
+        {
+            teams_url: json.dumps(teams_payload).encode(),
+            brazil_schedule_url: json.dumps(schedule_payload).encode(),
+            morocco_schedule_url: json.dumps(schedule_payload).encode(),
+        }
+    )
+
+    result = EspnTeamScheduleDiscoveryDataSourceAdapter(
+        source_name="espn-world-cup-team-schedules",
+        url=teams_url,
+        category=SourceCategory.TEAM_FORM,
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=http_client,
+    ).ingest_team_form()
+
+    assert http_client.requested_urls == [
+        teams_url,
+        brazil_schedule_url,
+        morocco_schedule_url,
+    ]
+    assert result.status == "ingested"
+    assert result.item_count == 2
+    assert result.snapshot is not None
+    assert result.snapshot.path.suffix == ".json"
+    assert ("team_match_goals_for", "Brazil", 1) in {
+        (fact.fact_type, fact.entity_key, fact.value) for fact in result.facts
+    }
+    assert ("team_match_result", "Morocco", "draw") in {
+        (fact.fact_type, fact.entity_key, fact.value) for fact in result.facts
+    }
 
 
 def test_webpage_schedule_adapter_extracts_schema_org_sports_events():
@@ -1067,6 +1145,76 @@ def test_source_ingestion_routes_world_football_elo_adapter():
 
     assert result.status == "ingested"
     assert result.facts[0].entity_key == "Brazil"
+
+
+def test_source_ingestion_routes_espn_team_schedule_discovery_adapter():
+    tmp_path = workspace_tmp()
+    teams_url = "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/teams"
+    schedule_url = "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/teams/205/schedule"
+    http_client = UrlMappedHttpClient(
+        {
+            teams_url: json.dumps(
+                {
+                    "sports": [
+                        {
+                            "leagues": [
+                                {
+                                    "teams": [
+                                        {"team": {"id": "205", "displayName": "Brazil"}}
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ).encode(),
+            schedule_url: json.dumps(
+                {
+                    "events": [
+                        {
+                            "id": "760419",
+                            "date": "2026-06-13T22:00Z",
+                            "competitions": [
+                                {
+                                    "status": {"type": {"description": "Full Time"}},
+                                    "competitors": [
+                                        {
+                                            "homeAway": "home",
+                                            "team": {"displayName": "Brazil"},
+                                            "score": {"displayValue": "1"},
+                                        },
+                                        {
+                                            "homeAway": "away",
+                                            "team": {"displayName": "Morocco"},
+                                            "score": {"displayValue": "1"},
+                                        },
+                                    ],
+                                }
+                            ],
+                        }
+                    ]
+                }
+            ).encode(),
+        }
+    )
+
+    result = ingest_source(
+        SourceDefinition(
+            category=SourceCategory.TEAM_FORM,
+            name="espn-world-cup-team-schedules",
+            url=teams_url,
+            priority=2,
+            adapter="espn_team_schedules",
+        ),
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=http_client,
+    )
+
+    assert result.status == "ingested"
+    assert result.item_count == 1
+    assert ("team_match_result", "Brazil", "draw") in {
+        (fact.fact_type, fact.entity_key, fact.value) for fact in result.facts
+    }
 
 
 def test_source_ingestion_routes_sportsmole_injury_adapter():

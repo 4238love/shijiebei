@@ -76,6 +76,9 @@ World Football Elo uses a dedicated adapter that snapshots `World.tsv` plus
 ESPN team schedule endpoints can be configured as `team_form` sources. The
 scoreboard adapter accepts both string scores and ESPN score objects, then keeps
 the latest completed match per team so recent-form facts do not self-conflict.
+The `espn_team_schedules` adapter can start from ESPN's team index, discover team
+IDs, fetch each team schedule, and emit the same recent-form facts without
+manually listing one URL per team.
 
 Schedule webpage sources can parse Schema.org `SportsEvent` JSON-LD blocks into
 `fixture_kickoff` facts. `config/sources.local.json` uses this for an
