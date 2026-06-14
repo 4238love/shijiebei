@@ -11,7 +11,7 @@ docker compose up -d --build
 Services:
 
 - Frontend: <http://localhost:13000>
-- Source catalog page: <http://localhost:13000/sources>
+- Source operations page: <http://localhost:13000/sources>
 - Methodology page: <http://localhost:13000/methodology>
 - Backend health: <http://localhost:8000/health>
 - Source catalog API: <http://localhost:8000/sources>
@@ -43,6 +43,11 @@ Each category is isolated behind a Data Source Adapter and writes Source Snapsho
 $body = @{ category = "schedule"; source_name = "espn-world-cup-scoreboard" } | ConvertTo-Json
 Invoke-RestMethod -Method Post -Uri http://localhost:8000/sources/ingest -ContentType "application/json" -Body $body
 ```
+
+The frontend Sources page includes an operations console for running snapshot-backed `ingest` or `validate` against all first-wave categories or one selected category:
+
+- `Run ingest`: fetches configured sources and extracts matches/facts.
+- `Run validate`: fetches configured sources, normalizes facts, and cross-checks them by source priority.
 
 Webpage sources now return category-aware normalized facts when the static HTML contains extractable signals:
 

@@ -248,6 +248,119 @@ h2 {
   margin-top: 18px;
 }
 
+.source-ops {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 24px;
+  margin-top: 18px;
+  padding: 30px;
+  border: 1px solid rgba(117, 240, 178, 0.28);
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at 90% 12%, rgba(117, 240, 178, 0.12), transparent 18rem),
+    rgba(10, 13, 28, 0.88);
+}
+
+.source-ops-controls {
+  display: grid;
+  gap: 16px;
+  align-content: center;
+}
+
+.source-ops label {
+  display: grid;
+  gap: 10px;
+}
+
+.source-ops select {
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid rgba(154, 165, 255, 0.28);
+  border-radius: 16px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+  font: inherit;
+}
+
+.source-ops-buttons {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.source-ops button {
+  min-height: 48px;
+  border: 1px solid rgba(231, 217, 111, 0.4);
+  border-radius: 999px;
+  color: #060711;
+  background: var(--accent);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.source-ops button:last-child {
+  border-color: rgba(117, 240, 178, 0.48);
+  background: var(--ok);
+}
+
+.source-ops button:disabled,
+.source-ops select:disabled {
+  cursor: wait;
+  opacity: 0.56;
+}
+
+.source-ops-summary {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.source-ops-summary article {
+  padding: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.source-ops-summary strong {
+  display: block;
+  color: var(--accent);
+  font-size: 2.2rem;
+  line-height: 1;
+}
+
+.source-status-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.source-status-row span {
+  padding: 8px 10px;
+  border: 1px solid rgba(117, 240, 178, 0.34);
+  border-radius: 999px;
+  color: var(--ok);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.source-ops-error {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 16px 18px;
+  border: 1px solid rgba(240, 138, 117, 0.4);
+  border-radius: 18px;
+  color: #ffd5cc;
+  background: rgba(240, 138, 117, 0.1);
+}
+
 .source-health article {
   padding: 26px;
   border: 1px solid var(--panel-border);
@@ -426,6 +539,9 @@ h2 {
   .method-grid,
   .method-grid ul,
   .source-health,
+  .source-ops,
+  .source-ops-buttons,
+  .source-ops-summary,
   .source-list,
   .metric-board,
   .report-grid,

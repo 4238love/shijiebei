@@ -1,3 +1,5 @@
+import { SourceOperations } from "./source-operations";
+
 type SourceItem = {
   category: string;
   name: string;
@@ -12,7 +14,7 @@ type SourcesPayload = {
   sources: SourceItem[];
 };
 
-const implementedAdapters = new Set(["espn_scoreboard"]);
+const implementedAdapters = new Set(["espn_scoreboard", "webpage"]);
 
 async function fetchSources(): Promise<SourcesPayload | null> {
   const backendUrl = process.env.BACKEND_INTERNAL_URL ?? "http://localhost:8000";
@@ -51,14 +53,16 @@ export default async function SourcesPage() {
         <h1>Live data intake map</h1>
         <p className="summary">
           First-wave crawl targets for schedule, form, rankings, injuries, odds,
-          news sentiment, and player data. ESPN is wired as the first real JSON
-          parser; heavyweight web pages stay configured until their adapters are
-          implemented.
+          news sentiment, and player data. ESPN JSON and first-wave webpage
+          extraction are wired behind snapshots so predictions do not scrape
+          pages directly at button-click time.
         </p>
       </section>
 
       {payload ? (
         <>
+          <SourceOperations categories={Object.keys(groups).sort()} />
+
           <section className="source-health" aria-label="Source coverage">
             <article>
               <p className="label">Configured sources</p>
