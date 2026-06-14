@@ -353,6 +353,67 @@ h2 {
   box-shadow: 0 0 24px rgba(117, 240, 178, 0.16);
 }
 
+.metric-board,
+.report-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.metric-card,
+.report-grid article {
+  padding: 28px;
+  border: 1px solid var(--panel-border);
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(117, 240, 178, 0.09), transparent 16rem),
+    rgba(10, 13, 28, 0.86);
+}
+
+.metric-card strong {
+  display: block;
+  color: var(--accent);
+  font-size: clamp(2.4rem, 8vw, 5rem);
+  line-height: 0.94;
+}
+
+.metric-card p,
+.report-grid p {
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.wide-card {
+  grid-column: 1 / -1;
+}
+
+.segment-list,
+.factor-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.segment-list span,
+.factor-grid span {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  color: var(--accent);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.factor-grid b {
+  color: var(--muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
 @media (max-width: 720px) {
   .hero {
     padding: 30px;
@@ -365,7 +426,11 @@ h2 {
   .method-grid,
   .method-grid ul,
   .source-health,
-  .source-list {
+  .source-list,
+  .metric-board,
+  .report-grid,
+  .segment-list,
+  .factor-grid {
     grid-template-columns: 1fr;
   }
 }
