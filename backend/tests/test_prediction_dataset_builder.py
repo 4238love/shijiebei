@@ -75,3 +75,17 @@ def test_build_prediction_dataset_uses_decimal_odds_as_market_strength_signal():
 
     assert dataset.home.attack_index > dataset.away.attack_index
     assert dataset.home.defense_weakness < dataset.away.defense_weakness
+
+
+def test_build_prediction_dataset_penalizes_team_unavailable_players():
+    dataset = build_prediction_dataset_from_validated_facts(
+        home_team="Brazil",
+        away_team="Croatia",
+        validated_facts=[
+            fact("team_unavailable_player_count", "Brazil", 2),
+            fact("team_unavailable_player_count", "Croatia", 0),
+        ],
+    )
+
+    assert dataset.home.attack_index < dataset.away.attack_index
+    assert dataset.home.defense_weakness > dataset.away.defense_weakness

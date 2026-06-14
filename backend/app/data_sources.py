@@ -675,8 +675,13 @@ def _injury_facts(text: str, *, source_name: str) -> list[NormalizedFact]:
             )
         )
 
-    if facts:
-        return facts
+    team_facts = _team_unavailable_player_count_facts(
+        text,
+        statuses=statuses,
+        source_name=source_name,
+    )
+    if facts or team_facts:
+        return [*facts, *team_facts]
 
     injury_signal_count = sum(
         len(re.findall(term, text, flags=re.IGNORECASE))
@@ -693,6 +698,54 @@ def _injury_facts(text: str, *, source_name: str) -> list[NormalizedFact]:
         ]
 
     return []
+
+
+def _team_unavailable_player_count_facts(
+    text: str,
+    *,
+    statuses: tuple[str, ...],
+    source_name: str,
+) -> list[NormalizedFact]:
+    segment_pattern = re.compile(
+        r"\b([A-Z][A-Za-z' .-]{1,32})\s*:\s*([^.;]+)",
+        re.IGNORECASE,
+    )
+    status_pattern = re.compile(rf"\b({'|'.join(statuses)})\b", re.IGNORECASE)
+    unavailable_statuses = {
+        "ruled out",
+        "doubtful",
+        "injured",
+        "suspended",
+        "unavailable",
+        "out",
+    }
+    facts: list[NormalizedFact] = []
+    seen_teams: set[str] = set()
+    for segment in segment_pattern.finditer(text):
+        team_name = _clean_entity_name(segment.group(1))
+        if not team_name or team_name in seen_teams:
+            continue
+
+        statuses_in_segment = [
+            match.group(1).lower() for match in status_pattern.finditer(segment.group(2))
+        ]
+        if not statuses_in_segment:
+            continue
+
+        seen_teams.add(team_name)
+        unavailable_count = sum(
+            1 for status in statuses_in_segment if status in unavailable_statuses
+        )
+        facts.append(
+            NormalizedFact(
+                fact_type="team_unavailable_player_count",
+                entity_key=team_name,
+                value=unavailable_count,
+                source_name=source_name,
+            )
+        )
+
+    return facts
 
 
 def _odds_facts(text: str, *, source_name: str) -> list[NormalizedFact]:

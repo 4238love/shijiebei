@@ -60,6 +60,11 @@ def _team_model(
         fact_type="team_ranking_position",
         entity_key=team_name,
     )
+    unavailable_player_counts = _numeric_values(
+        facts,
+        fact_type="team_unavailable_player_count",
+        entity_key=team_name,
+    )
     results = _string_values(facts, fact_type="team_match_result", entity_key=team_name)
 
     attack_index = 1.0
@@ -79,6 +84,12 @@ def _team_model(
         defense_weakness *= _clamp(1 / ranking_factor, 0.8, 1.3)
     if results:
         attack_index *= _result_attack_factor(results)
+    if unavailable_player_counts:
+        attack_penalty, defense_penalty = _availability_factors(
+            mean(unavailable_player_counts)
+        )
+        attack_index *= attack_penalty
+        defense_weakness *= defense_penalty
     if market_strength_factor != 1.0:
         attack_index *= market_strength_factor
         defense_weakness *= _clamp(1 / market_strength_factor, 0.85, 1.18)
@@ -113,6 +124,13 @@ def _market_strength_factors(
 
 def _market_share_factor(two_way_share: float) -> float:
     return _clamp(1 + (two_way_share - 0.5) * 0.4, 0.88, 1.12)
+
+
+def _availability_factors(unavailable_count: float) -> tuple[float, float]:
+    return (
+        _clamp(1 - unavailable_count * 0.04, 0.84, 1.0),
+        _clamp(1 + unavailable_count * 0.03, 1.0, 1.12),
+    )
 
 
 def _numeric_values(

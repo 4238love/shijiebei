@@ -364,6 +364,26 @@ def test_webpage_adapter_extracts_injury_feed_signal_when_player_status_is_missi
     assert result.facts[0].value == 2
 
 
+def test_webpage_adapter_extracts_team_unavailable_player_count():
+    tmp_path = workspace_tmp()
+    result = HttpWebpageDataSourceAdapter(
+        source_name="bbc-world-cup-football-injuries",
+        url="https://www.bbc.com/sport/football/world-cup",
+        category=SourceCategory.INJURY,
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=FakeHttpClient(
+            b"<html><body>Brazil: Neymar doubtful, Vinicius Junior suspended. Croatia: Modric available.</body></html>"
+        ),
+    ).ingest_snapshot()
+
+    assert ("team_unavailable_player_count", "Brazil", 2) in {
+        (fact.fact_type, fact.entity_key, fact.value) for fact in result.facts
+    }
+    assert ("team_unavailable_player_count", "Croatia", 0) in {
+        (fact.fact_type, fact.entity_key, fact.value) for fact in result.facts
+    }
+
+
 def test_webpage_adapter_extracts_odds_news_sentiment_and_player_facts():
     tmp_path = workspace_tmp()
 

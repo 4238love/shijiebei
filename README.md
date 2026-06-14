@@ -97,6 +97,10 @@ The homepage includes the same flow behind a browser form. Choose home/away team
 market prices: lower decimal odds increase the team's market strength factor,
 raise attack index, and reduce defensive weakness before Monte Carlo simulation.
 
+Team-scoped injury segments such as `Brazil: Neymar doubtful, Vinicius Junior
+suspended` emit `team_unavailable_player_count` facts. Those facts reduce the
+team's attack index and increase defensive weakness before simulation.
+
 Saved prediction records can be reviewed with their source-backed evidence:
 
 - Backend history route: `GET /predictions`

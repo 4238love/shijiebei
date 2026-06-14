@@ -248,6 +248,59 @@ def test_create_match_prediction_from_odds_sources_uses_market_prices():
     ]
 
 
+def test_create_match_prediction_from_injury_sources_uses_team_availability():
+    tmp_path = workspace_tmp()
+    config_path = tmp_path / "sources.json"
+    injury_url = "https://data-source.example/injuries.html"
+    config_path.write_text(
+        """
+        {
+          "injury": [
+            {
+              "name": "injury-source",
+              "url": "https://data-source.example/injuries.html",
+              "priority": 1,
+              "adapter": "webpage"
+            }
+          ]
+        }
+        """,
+        encoding="utf-8",
+    )
+    client = TestClient(
+        create_app(
+            source_config_path=config_path,
+            source_snapshot_dir=tmp_path / "snapshots",
+            source_http_client=UrlMappedHttpClient(
+                {
+                    injury_url: b"<html><body>Brazil: Neymar doubtful, Vinicius Junior suspended. Croatia: Modric available.</body></html>",
+                }
+            ),
+        )
+    )
+
+    response = client.post(
+        "/predictions/from-sources",
+        json={
+            "home_team": "Brazil",
+            "away_team": "Croatia",
+            "category": "injury",
+            "simulation_count": 1_000,
+            "seed": 20260614,
+        },
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["source_summary"]["validated_fact_count"] == 5
+    assert body["dataset"]["home"]["attack_index"] < body["dataset"]["away"][
+        "attack_index"
+    ]
+    assert body["dataset"]["home"]["defense_weakness"] > body["dataset"]["away"][
+        "defense_weakness"
+    ]
+
+
 def test_list_predictions_includes_source_summary_for_source_backed_runs():
     tmp_path = workspace_tmp()
     config_path = tmp_path / "sources.json"
