@@ -740,6 +740,77 @@ class TransfermarktInjuryDataSourceAdapter:
         return httpx
 
 
+class TransfermarktSquadDataSourceAdapter:
+    def __init__(
+        self,
+        *,
+        source_name: str,
+        url: str,
+        category: SourceCategory | None = SourceCategory.PLAYER,
+        snapshot_dir: Path,
+        http_client=None,
+        timeout_seconds: int = 10,
+    ):
+        self.source_name = source_name
+        self.url = url
+        self.category = category
+        self.snapshot_dir = Path(snapshot_dir)
+        self.http_client = http_client
+        self.timeout_seconds = timeout_seconds
+
+    def ingest_players(self) -> SourceIngestionResult:
+        snapshot = self.fetch_snapshot()
+        content = snapshot.path.read_text(encoding="utf-8", errors="ignore")
+        facts = tuple(
+            _transfermarkt_squad_facts_from_html(
+                content,
+                source_name=self.source_name,
+            )
+        )
+        player_fact_count = sum(
+            1 for fact in facts if fact.fact_type == "player_presence"
+        )
+
+        return SourceIngestionResult(
+            source_name=self.source_name,
+            category=self.category,
+            status=SourceIngestionStatus.INGESTED,
+            item_count=player_fact_count,
+            snapshot=snapshot,
+            facts=facts,
+            message=_webpage_ingestion_message(facts),
+        )
+
+    def fetch_snapshot(self) -> SourceSnapshot:
+        response = _http_get_webpage(
+            self._http_client(),
+            self.url,
+            timeout_seconds=self.timeout_seconds,
+        )
+        response.raise_for_status()
+        content = response.content
+        content_hash = sha256(content).hexdigest()
+        self.snapshot_dir.mkdir(parents=True, exist_ok=True)
+        snapshot_path = (
+            self.snapshot_dir / f"{_safe_name(self.source_name)}-{content_hash[:12]}.html"
+        )
+        snapshot_path.write_bytes(content)
+
+        return SourceSnapshot(
+            source_name=self.source_name,
+            path=snapshot_path,
+            content_hash=content_hash,
+        )
+
+    def _http_client(self):
+        if self.http_client is not None:
+            return self.http_client
+
+        import httpx
+
+        return httpx
+
+
 class OddsCheckerOddsDataSourceAdapter:
     def __init__(
         self,
@@ -1738,6 +1809,62 @@ def _transfermarkt_row_injury_status(row_html: str) -> str:
     if re.search(r"\bout\b", row_text):
         return "out"
     return "injured"
+
+
+def _transfermarkt_squad_facts_from_html(
+    content: str,
+    *,
+    source_name: str,
+) -> list[NormalizedFact]:
+    player_facts: list[NormalizedFact] = []
+    team_player_counts: dict[str, int] = {}
+    seen_players: set[str] = set()
+    seen_team_players: set[tuple[str, str]] = set()
+
+    for match in re.finditer(
+        r"<tr\b[^>]*>(.*?)</tr>",
+        content,
+        flags=re.IGNORECASE | re.DOTALL,
+    ):
+        row_html = match.group(1)
+        player_name = _transfermarkt_row_player_name(row_html)
+        if not player_name:
+            continue
+
+        if player_name not in seen_players:
+            seen_players.add(player_name)
+            player_facts.append(
+                NormalizedFact(
+                    fact_type="player_presence",
+                    entity_key=player_name,
+                    value="listed",
+                    source_name=source_name,
+                )
+            )
+
+        team_name = _transfermarkt_row_team_name(
+            row_html,
+            player_name=player_name,
+        )
+        if not team_name:
+            continue
+
+        team_player_key = (team_name, player_name)
+        if team_player_key in seen_team_players:
+            continue
+        seen_team_players.add(team_player_key)
+        team_player_counts[team_name] = team_player_counts.get(team_name, 0) + 1
+
+    team_facts = [
+        NormalizedFact(
+            fact_type="team_listed_player_count",
+            entity_key=team_name,
+            value=count,
+            source_name=source_name,
+        )
+        for team_name, count in sorted(team_player_counts.items())
+    ]
+    return [*player_facts, *team_facts]
 
 
 def _looks_like_team_name(value: str) -> bool:

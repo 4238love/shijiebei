@@ -13,6 +13,7 @@ from app.data_sources import (
     SourceIngestionResult,
     SourceIngestionStatus,
     TransfermarktInjuryDataSourceAdapter,
+    TransfermarktSquadDataSourceAdapter,
     WorldFootballEloDataSourceAdapter,
 )
 from app.source_config import SourceDefinition
@@ -92,6 +93,16 @@ def ingest_source(
             snapshot_dir=snapshot_dir,
             http_client=http_client,
         ).ingest_odds()
+        return replace(result, category=definition.category)
+
+    if definition.adapter == "transfermarkt_squads":
+        result = TransfermarktSquadDataSourceAdapter(
+            source_name=definition.name,
+            url=definition.url,
+            category=definition.category,
+            snapshot_dir=snapshot_dir,
+            http_client=http_client,
+        ).ingest_players()
         return replace(result, category=definition.category)
 
     if definition.adapter == "world_football_elo":

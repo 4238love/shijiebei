@@ -56,3 +56,16 @@ def test_local_source_config_uses_dedicated_oddschecker_odds_adapter():
 
     assert len(oddschecker_sources) == 1
     assert oddschecker_sources[0].adapter == "oddschecker_odds"
+
+
+def test_local_source_config_uses_dedicated_transfermarkt_squad_adapter():
+    config = load_source_catalog_config(Path("config/sources.local.json"))
+
+    transfermarkt_squad_sources = [
+        source
+        for source in config.sources
+        if source.name == "transfermarkt-world-cup-2026-squads"
+    ]
+
+    assert len(transfermarkt_squad_sources) == 1
+    assert transfermarkt_squad_sources[0].adapter == "transfermarkt_squads"

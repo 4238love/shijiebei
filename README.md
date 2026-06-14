@@ -159,7 +159,8 @@ The `espn_team_rosters` adapter can start from ESPN's team index, discover team
 IDs, fetch each roster JSON endpoint, and emit player-level facts without
 manually listing one squad page per team.
 Transfermarkt's World Cup squad page is configured as a secondary player-data
-target for squad/player cross-checking.
+target using the dedicated `transfermarkt_squads` adapter for squad/player
+cross-checking.
 Delete the matching file under `.scratch/source-snapshots/` when an operator
 needs to force an immediate ESPN discovery refresh.
 
@@ -192,4 +193,4 @@ FIFA, Transfermarkt, OddsPortal, OddsChecker, BBC, and Elo pages are configured
 as crawl targets. Dedicated parsers should be added as separate adapters when a
 source needs more than the generic webpage parser; current dedicated adapters
 cover ESPN discovery, Sports Mole injuries, Transfermarkt injuries, and World
-Football Elo, plus OddsChecker match-card odds.
+Football Elo, plus OddsChecker match-card odds and Transfermarkt squad rows.

@@ -13,6 +13,7 @@ from app.data_sources import (
     SportsMoleInjuryDataSourceAdapter,
     SourceCategory,
     TransfermarktInjuryDataSourceAdapter,
+    TransfermarktSquadDataSourceAdapter,
     WorldFootballEloDataSourceAdapter,
 )
 from app.main import create_app
@@ -1139,6 +1140,80 @@ def test_espn_team_roster_discovery_reuses_fresh_snapshot_cache():
     assert second.facts == first.facts
 
 
+def test_transfermarkt_squad_adapter_extracts_player_rows_and_team_counts():
+    tmp_path = workspace_tmp()
+    result = TransfermarktSquadDataSourceAdapter(
+        source_name="transfermarkt-world-cup-2026-squads",
+        url="https://www.transfermarkt.com/world-cup-2026/teilnehmer/pokalwettbewerb/WM26",
+        category=SourceCategory.PLAYER,
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=FakeHttpClient(
+            b"""
+            <html><body><table>
+              <tr>
+                <td class="hauptlink"><a title="Neymar" href="/neymar/profil/spieler/68290">Neymar</a></td>
+                <td><img title="Brazil" alt="Brazil" /></td>
+              </tr>
+              <tr>
+                <td class="hauptlink"><a href="/vinicius-junior/profil/spieler/371998">Vinicius Junior</a></td>
+                <td><img title="Brazil" alt="Brazil" /></td>
+              </tr>
+              <tr>
+                <td class="hauptlink"><a href="/achraf-hakimi/profil/spieler/398073">Achraf Hakimi</a></td>
+                <td><img title="Morocco" alt="Morocco" /></td>
+              </tr>
+            </table></body></html>
+            """
+        ),
+    ).ingest_players()
+
+    assert result.status == "ingested"
+    assert result.item_count == 3
+    assert ("player_presence", "Neymar", "listed") in {
+        (fact.fact_type, fact.entity_key, fact.value) for fact in result.facts
+    }
+    assert ("player_presence", "Achraf Hakimi", "listed") in {
+        (fact.fact_type, fact.entity_key, fact.value) for fact in result.facts
+    }
+    assert ("team_listed_player_count", "Brazil", 2) in {
+        (fact.fact_type, fact.entity_key, fact.value) for fact in result.facts
+    }
+    assert ("team_listed_player_count", "Morocco", 1) in {
+        (fact.fact_type, fact.entity_key, fact.value) for fact in result.facts
+    }
+
+
+def test_transfermarkt_squad_adapter_deduplicates_repeated_player_rows():
+    tmp_path = workspace_tmp()
+    result = TransfermarktSquadDataSourceAdapter(
+        source_name="transfermarkt-world-cup-2026-squads",
+        url="https://www.transfermarkt.com/world-cup-2026/teilnehmer/pokalwettbewerb/WM26",
+        category=SourceCategory.PLAYER,
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=FakeHttpClient(
+            b"""
+            <html><body><table>
+              <tr>
+                <td><a href="/neymar/profil/spieler/68290">Neymar</a></td>
+                <td><img title="Brazil" /></td>
+              </tr>
+              <tr>
+                <td><a href="/neymar/profil/spieler/68290">Neymar</a></td>
+                <td><img title="Brazil" /></td>
+              </tr>
+            </table></body></html>
+            """
+        ),
+    ).ingest_players()
+
+    assert [
+        (fact.fact_type, fact.entity_key, fact.value) for fact in result.facts
+    ] == [
+        ("player_presence", "Neymar", "listed"),
+        ("team_listed_player_count", "Brazil", 1),
+    ]
+
+
 def test_webpage_adapter_retries_without_browser_headers_when_waf_page_is_returned():
     tmp_path = workspace_tmp()
     http_client = WafThenDefaultHttpClient()
@@ -1676,6 +1751,36 @@ def test_source_ingestion_routes_oddschecker_odds_adapter():
     assert result.status == "ingested"
     assert result.facts[0].fact_type == "decimal_odds"
     assert result.facts[0].source_name == "oddschecker-world-cup"
+
+
+def test_source_ingestion_routes_transfermarkt_squad_adapter():
+    tmp_path = workspace_tmp()
+    url = "https://www.transfermarkt.com/world-cup-2026/teilnehmer/pokalwettbewerb/WM26"
+
+    result = ingest_source(
+        SourceDefinition(
+            category=SourceCategory.PLAYER,
+            name="transfermarkt-world-cup-2026-squads",
+            url=url,
+            priority=3,
+            adapter="transfermarkt_squads",
+        ),
+        snapshot_dir=tmp_path / "snapshots",
+        http_client=FakeHttpClient(
+            b"""
+            <html><body><table>
+              <tr>
+                <td class="hauptlink"><a href="/neymar/profil/spieler/68290">Neymar</a></td>
+                <td><img title="Brazil" /></td>
+              </tr>
+            </table></body></html>
+            """
+        ),
+    )
+
+    assert result.status == "ingested"
+    assert result.facts[0].fact_type == "player_presence"
+    assert result.facts[0].source_name == "transfermarkt-world-cup-2026-squads"
 
 
 def test_sources_api_lists_configured_source_catalog():

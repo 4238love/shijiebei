@@ -149,7 +149,7 @@
       "name": "transfermarkt-world-cup-2026-squads",
       "url": "https://www.transfermarkt.com/world-cup-2026/teilnehmer/pokalwettbewerb/WM26",
       "priority": 3,
-      "adapter": "webpage",
+      "adapter": "transfermarkt_squads",
       "notes": "Secondary squad/player-level crawl target for player dataset cross-checking."
     }
   ]
